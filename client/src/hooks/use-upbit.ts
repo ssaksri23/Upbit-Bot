@@ -213,3 +213,88 @@ export function useManualSell() {
     },
   });
 }
+
+export function useBacktest() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (params: { 
+      market: string; 
+      strategy: string; 
+      days?: number; 
+      buyThreshold?: number; 
+      sellThreshold?: number;
+      targetAmount?: number;
+    }) => {
+      const res = await fetch("/api/upbit/backtest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to backtest");
+      return res.json() as Promise<{
+        totalTrades: number;
+        winTrades: number;
+        lossTrades: number;
+        winRate: number;
+        totalProfit: number;
+        maxDrawdown: number;
+        trades: { timestamp: number; side: string; price: number; profit?: number }[];
+      }>;
+    },
+    onError: () => {
+      toast({
+        title: "백테스트 실패",
+        description: "백테스트 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useStatistics() {
+  return useQuery({
+    queryKey: ["/api/upbit/statistics"],
+    queryFn: async () => {
+      const res = await fetch("/api/upbit/statistics", { credentials: "include" });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error("Failed to fetch statistics");
+      return res.json() as Promise<{
+        daily: { date: string; profit: number; trades: number }[];
+        weekly: { week: string; profit: number; trades: number }[];
+        monthly: { month: string; profit: number; trades: number }[];
+        winRate: number;
+        avgProfit: number;
+        avgLoss: number;
+        profitFactor: number;
+        totalProfit: number;
+        bestTrade: number;
+        worstTrade: number;
+      }>;
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useIndicators(market: string) {
+  return useQuery({
+    queryKey: ["/api/upbit/indicators", market],
+    queryFn: async () => {
+      const res = await fetch(`/api/upbit/indicators?market=${encodeURIComponent(market)}`, { credentials: "include" });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error("Failed to fetch indicators");
+      return res.json() as Promise<{
+        macd: { line: number; signal: number; histogram: number };
+        stochastic: { k: number; d: number };
+        rsi: number;
+        sma5: number;
+        sma20: number;
+        ema12: number;
+        ema26: number;
+        bb: { upper: number; middle: number; lower: number };
+      }>;
+    },
+    refetchInterval: 5000,
+  });
+}

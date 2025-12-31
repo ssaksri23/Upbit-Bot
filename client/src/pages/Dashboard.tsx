@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell, useCandles, useRecommendations } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell, useCandles, useRecommendations, useBacktest, useStatistics, useIndicators } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,13 @@ import {
   Minus,
   RefreshCw,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  FlaskConical,
+  LineChart,
+  Shield,
+  Target,
+  Percent,
+  Calendar
 } from "lucide-react";
 import {
   Dialog,
@@ -86,7 +92,11 @@ export default function Dashboard() {
   const manualSell = useManualSell();
   const { data: candles } = useCandles(formState.market, 60);
   const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } = useRecommendations();
+  const backtest = useBacktest();
+  const { data: statistics } = useStatistics();
+  const { data: indicators } = useIndicators(formState.market);
   const [buyAmount, setBuyAmount] = useState("10000");
+  const [backtestDays, setBacktestDays] = useState("7");
 
   useEffect(() => {
     if (settings) {
@@ -415,6 +425,192 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               {isKorean ? "추천 종목을 불러오는 중..." : "Loading recommendations..."}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Backtest & Statistics Section */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Backtest Card */}
+        <Card className="border-primary/20">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" />
+              <CardTitle>{isKorean ? "백테스트" : "Backtest"}</CardTitle>
+            </div>
+            <CardDescription>{isKorean ? "과거 데이터로 전략 테스트" : "Test strategy with historical data"}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Label className="whitespace-nowrap">{isKorean ? "기간" : "Days"}</Label>
+                <Select value={backtestDays} onValueChange={setBacktestDays}>
+                  <SelectTrigger className="w-20" data-testid="select-backtest-days">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">7</SelectItem>
+                    <SelectItem value="14">14</SelectItem>
+                    <SelectItem value="30">30</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={() => backtest.mutate({
+                  market: formState.market,
+                  strategy: formState.strategy,
+                  days: parseInt(backtestDays),
+                  buyThreshold: parseFloat(formState.buyThreshold),
+                  sellThreshold: parseFloat(formState.sellThreshold),
+                  targetAmount: parseFloat(formState.targetAmount),
+                })}
+                disabled={backtest.isPending}
+                data-testid="button-run-backtest"
+              >
+                {backtest.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isKorean ? "테스트 실행" : "Run Test"}
+              </Button>
+            </div>
+            {backtest.data && (
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "총 거래" : "Trades"}</div>
+                  <div className="font-mono font-bold">{backtest.data.totalTrades}</div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "승률" : "Win Rate"}</div>
+                  <div className={cn("font-mono font-bold", backtest.data.winRate >= 50 ? "text-green-500" : "text-red-500")}>
+                    {backtest.data.winRate.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "수익" : "Profit"}</div>
+                  <div className={cn("font-mono font-bold", backtest.data.totalProfit >= 0 ? "text-green-500" : "text-red-500")}>
+                    {backtest.data.totalProfit >= 0 ? "+" : ""}{formatPrice(backtest.data.totalProfit)}
+                  </div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "최대 낙폭" : "Max DD"}</div>
+                  <div className="font-mono font-bold text-red-500">-{backtest.data.maxDrawdown.toFixed(1)}%</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Statistics Card */}
+        <Card className="border-primary/20">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <LineChart className="w-5 h-5 text-primary" />
+              <CardTitle>{isKorean ? "거래 통계" : "Trading Statistics"}</CardTitle>
+            </div>
+            <CardDescription>{isKorean ? "승률 및 수익 분석" : "Win rate & profit analysis"}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statistics ? (
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "승률" : "Win Rate"}</div>
+                  <div className={cn("font-mono font-bold", statistics.winRate >= 50 ? "text-green-500" : "text-red-500")}>
+                    {statistics.winRate.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "총 수익" : "Total Profit"}</div>
+                  <div className={cn("font-mono font-bold", statistics.totalProfit >= 0 ? "text-green-500" : "text-red-500")}>
+                    {statistics.totalProfit >= 0 ? "+" : ""}{formatPrice(statistics.totalProfit)}
+                  </div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "평균 이익" : "Avg Win"}</div>
+                  <div className="font-mono font-bold text-green-500">+{formatPrice(statistics.avgProfit)}</div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "평균 손실" : "Avg Loss"}</div>
+                  <div className="font-mono font-bold text-red-500">-{formatPrice(statistics.avgLoss)}</div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "최고 거래" : "Best Trade"}</div>
+                  <div className="font-mono font-bold text-green-500">+{formatPrice(statistics.bestTrade)}</div>
+                </div>
+                <div className="p-2 rounded bg-secondary/50">
+                  <div className="text-muted-foreground">{isKorean ? "최악 거래" : "Worst Trade"}</div>
+                  <div className="font-mono font-bold text-red-500">{formatPrice(statistics.worstTrade)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                {isKorean ? "거래 기록이 없습니다" : "No trade history"}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced Indicators Card */}
+      <Card className="border-primary/20">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" />
+            <CardTitle>{isKorean ? "기술적 지표" : "Technical Indicators"}</CardTitle>
+          </div>
+          <CardDescription>{isKorean ? "MACD, 스토캐스틱, RSI 등" : "MACD, Stochastic, RSI, etc."}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {indicators ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="p-3 rounded bg-secondary/50 space-y-1">
+                <div className="text-muted-foreground font-medium">RSI (14)</div>
+                <div className={cn(
+                  "font-mono text-lg font-bold",
+                  indicators.rsi < 30 ? "text-green-500" : indicators.rsi > 70 ? "text-red-500" : ""
+                )}>
+                  {indicators.rsi.toFixed(1)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {indicators.rsi < 30 ? (isKorean ? "과매도" : "Oversold") : 
+                   indicators.rsi > 70 ? (isKorean ? "과매수" : "Overbought") : 
+                   (isKorean ? "중립" : "Neutral")}
+                </div>
+              </div>
+              <div className="p-3 rounded bg-secondary/50 space-y-1">
+                <div className="text-muted-foreground font-medium">MACD</div>
+                <div className={cn(
+                  "font-mono text-lg font-bold",
+                  indicators.macd.histogram > 0 ? "text-green-500" : "text-red-500"
+                )}>
+                  {indicators.macd.histogram > 0 ? "+" : ""}{indicators.macd.histogram.toFixed(0)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {indicators.macd.histogram > 0 ? (isKorean ? "상승 모멘텀" : "Bullish") : (isKorean ? "하락 모멘텀" : "Bearish")}
+                </div>
+              </div>
+              <div className="p-3 rounded bg-secondary/50 space-y-1">
+                <div className="text-muted-foreground font-medium">{isKorean ? "스토캐스틱" : "Stochastic"}</div>
+                <div className={cn(
+                  "font-mono text-lg font-bold",
+                  indicators.stochastic.k < 20 ? "text-green-500" : indicators.stochastic.k > 80 ? "text-red-500" : ""
+                )}>
+                  {indicators.stochastic.k.toFixed(0)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  %K: {indicators.stochastic.k.toFixed(0)} / %D: {indicators.stochastic.d.toFixed(0)}
+                </div>
+              </div>
+              <div className="p-3 rounded bg-secondary/50 space-y-1">
+                <div className="text-muted-foreground font-medium">{isKorean ? "볼린저 밴드" : "Bollinger"}</div>
+                <div className="font-mono text-xs space-y-0.5">
+                  <div className="text-red-400">{isKorean ? "상단" : "Upper"}: {formatPrice(indicators.bb.upper)}</div>
+                  <div className="text-muted-foreground">{isKorean ? "중앙" : "Mid"}: {formatPrice(indicators.bb.middle)}</div>
+                  <div className="text-green-400">{isKorean ? "하단" : "Lower"}: {formatPrice(indicators.bb.lower)}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           )}
         </CardContent>

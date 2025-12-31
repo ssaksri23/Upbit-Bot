@@ -43,6 +43,18 @@ export const botSettings = pgTable("bot_settings", {
   // Trading state (persisted for restart recovery)
   referencePrice: numeric("reference_price"),
   lastTradeTime: timestamp("last_trade_time"),
+  
+  // Stop-loss / Take-profit settings
+  stopLossPercent: numeric("stop_loss_percent").default("5"), // -5% 손절
+  takeProfitPercent: numeric("take_profit_percent").default("10"), // +10% 익절
+  trailingStopEnabled: boolean("trailing_stop_enabled").default(false),
+  trailingStopPercent: numeric("trailing_stop_percent").default("2"), // 고점 대비 -2%
+  splitSellEnabled: boolean("split_sell_enabled").default(false), // 분할 매도
+  splitSellPercents: text("split_sell_percents").default("50,100"), // 50%, 100% 각각 절반씩
+  
+  // Portfolio settings
+  portfolioMarkets: text("portfolio_markets"), // comma-separated markets
+  portfolioAllocations: text("portfolio_allocations"), // comma-separated percentages
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });

@@ -319,5 +319,46 @@ export async function registerRoutes(
     res.json(logs);
   });
 
+  // Backtest endpoint
+  app.post("/api/upbit/backtest", requireAuth, async (req, res) => {
+    try {
+      const { market, strategy, days, buyThreshold, sellThreshold, targetAmount } = req.body;
+      const result = await upbitService.runBacktest(
+        market || "KRW-BTC",
+        strategy || "percent",
+        days || 30,
+        { buyThreshold, sellThreshold, targetAmount }
+      );
+      res.json(result);
+    } catch (e) {
+      console.error("Backtest error:", e);
+      res.status(500).json({ message: "Backtest failed" });
+    }
+  });
+
+  // Statistics endpoint
+  app.get("/api/upbit/statistics", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const stats = await upbitService.getStatistics(userId);
+      res.json(stats);
+    } catch (e) {
+      console.error("Statistics error:", e);
+      res.status(500).json({ message: "Failed to get statistics" });
+    }
+  });
+
+  // Advanced indicators endpoint
+  app.get("/api/upbit/indicators", requireAuth, async (req, res) => {
+    try {
+      const market = (req.query.market as string) || "KRW-BTC";
+      const indicators = await upbitService.getAdvancedIndicators(market);
+      res.json(indicators);
+    } catch (e) {
+      console.error("Indicators error:", e);
+      res.status(500).json({ message: "Failed to get indicators" });
+    }
+  });
+
   return httpServer;
 }

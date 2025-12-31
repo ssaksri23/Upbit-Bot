@@ -915,6 +915,359 @@ export class UpbitService {
     }
   }
 
+  // Calculate MACD - returns last valid values only
+  private calculateMACD(prices: number[], shortPeriod: number = 12, longPeriod: number = 26, signalPeriod: number = 9) {
+    if (prices.length < longPeriod + signalPeriod) {
+      return { macdLine: [0], signalLine: [0], histogram: [0] };
+    }
+    const emaShort = this.calculateEMA(prices, shortPeriod);
+    const emaLong = this.calculateEMA(prices, longPeriod);
+    
+    // MACD Line = EMA12 - EMA26 (calculated point by point)
+    const macdLine: number[] = [];
+    for (let i = 0; i < prices.length; i++) {
+      macdLine.push(emaShort[i] - emaLong[i]);
+    }
+    
+    // Signal Line = EMA9 of MACD Line
+    const signalLine = this.calculateEMA(macdLine, signalPeriod);
+    
+    // Histogram = MACD Line - Signal Line
+    const histogram: number[] = [];
+    for (let i = 0; i < macdLine.length; i++) {
+      histogram.push(macdLine[i] - signalLine[i]);
+    }
+    
+    return { macdLine, signalLine, histogram };
+  }
+
+  private calculateEMA(prices: number[], period: number): number[] {
+    const multiplier = 2 / (period + 1);
+    const ema: number[] = [];
+    for (let i = 0; i < prices.length; i++) {
+      if (i === 0) {
+        ema.push(prices[0]);
+      } else {
+        ema.push((prices[i] - ema[i - 1]) * multiplier + ema[i - 1]);
+      }
+    }
+    return ema;
+  }
+
+  // Calculate Stochastic
+  private calculateStochastic(candles: CandleData[], period: number = 14, smoothK: number = 3, smoothD: number = 3) {
+    const kValues: number[] = [];
+    for (let i = 0; i < candles.length; i++) {
+      if (i < period - 1) {
+        kValues.push(50);
+        continue;
+      }
+      const slice = candles.slice(i - period + 1, i + 1);
+      const high = Math.max(...slice.map(c => c.high));
+      const low = Math.min(...slice.map(c => c.low));
+      const close = candles[i].close;
+      const k = high !== low ? ((close - low) / (high - low)) * 100 : 50;
+      kValues.push(k);
+    }
+    const smoothedK = this.calculateSMAArray(kValues, smoothK);
+    const smoothedD = this.calculateSMAArray(smoothedK, smoothD);
+    return { k: smoothedK, d: smoothedD };
+  }
+
+  private calculateSMAArray(data: number[], period: number): number[] {
+    const result: number[] = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i < period - 1) {
+        result.push(data[i]);
+      } else {
+        const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+        result.push(sum / period);
+      }
+    }
+    return result;
+  }
+
+  // Backtest strategy with historical data
+  async runBacktest(market: string, strategy: string, days: number = 30, params: {
+    buyThreshold?: number;
+    sellThreshold?: number;
+    targetAmount?: number;
+  } = {}): Promise<{
+    totalTrades: number;
+    winTrades: number;
+    lossTrades: number;
+    winRate: number;
+    totalProfit: number;
+    maxDrawdown: number;
+    trades: { timestamp: number; side: string; price: number; profit?: number }[];
+  }> {
+    const count = Math.min(days * 24, 200); // Max 200 candles (hourly)
+    let candles: CandleData[] = [];
+    
+    try {
+      const res = await axios.get(`${this.baseUrl}/candles/minutes/60?market=${market}&count=${count}`);
+      candles = res.data.map((c: any) => ({
+        timestamp: new Date(c.candle_date_time_kst).getTime(),
+        open: c.opening_price,
+        high: c.high_price,
+        low: c.low_price,
+        close: c.trade_price,
+        volume: c.candle_acc_trade_volume,
+      })).reverse();
+    } catch (e) {
+      console.error("Backtest candle fetch failed:", e);
+      return { totalTrades: 0, winTrades: 0, lossTrades: 0, winRate: 0, totalProfit: 0, maxDrawdown: 0, trades: [] };
+    }
+
+    const trades: { timestamp: number; side: string; price: number; profit?: number }[] = [];
+    let position = 0;
+    let entryPrice = 0;
+    let balance = params.targetAmount || 100000;
+    let peak = balance;
+    let maxDrawdown = 0;
+    let winTrades = 0;
+    let lossTrades = 0;
+
+    const buyThreshold = params.buyThreshold || 0.5;
+    const sellThreshold = params.sellThreshold || 0.5;
+
+    for (let i = 20; i < candles.length; i++) {
+      const prices = candles.slice(0, i + 1).map(c => c.close);
+      const currentPrice = prices[prices.length - 1];
+      let signal: 'buy' | 'sell' | 'hold' = 'hold';
+
+      // Generate signal based on strategy
+      switch (strategy) {
+        case 'percent': {
+          if (i > 0) {
+            const prevPrice = prices[prices.length - 2];
+            const change = (currentPrice - prevPrice) / prevPrice * 100;
+            if (change <= -buyThreshold) signal = 'buy';
+            else if (change >= sellThreshold) signal = 'sell';
+          }
+          break;
+        }
+        case 'rsi': {
+          const rsi = this.calculateRSI(prices, 14);
+          if (rsi < 30) signal = 'buy';
+          else if (rsi > 70) signal = 'sell';
+          break;
+        }
+        case 'ma': {
+          const shortMA = this.calculateSMA(prices, 5);
+          const longMA = this.calculateSMA(prices, 20);
+          const prevShortMA = this.calculateSMA(prices.slice(0, -1), 5);
+          const prevLongMA = this.calculateSMA(prices.slice(0, -1), 20);
+          if (prevShortMA <= prevLongMA && shortMA > longMA) signal = 'buy';
+          else if (prevShortMA >= prevLongMA && shortMA < longMA) signal = 'sell';
+          break;
+        }
+        case 'bollinger': {
+          const bb = this.calculateBollingerBands(prices, 20, 2);
+          if (currentPrice <= bb.lower) signal = 'buy';
+          else if (currentPrice >= bb.upper) signal = 'sell';
+          break;
+        }
+      }
+
+      // Execute simulated trades
+      if (signal === 'buy' && position === 0) {
+        position = balance / currentPrice;
+        entryPrice = currentPrice;
+        trades.push({ timestamp: candles[i].timestamp, side: 'bid', price: currentPrice });
+      } else if (signal === 'sell' && position > 0) {
+        const exitValue = position * currentPrice;
+        const profit = exitValue - (position * entryPrice);
+        balance = exitValue;
+        
+        if (profit > 0) winTrades++;
+        else lossTrades++;
+        
+        trades.push({ timestamp: candles[i].timestamp, side: 'ask', price: currentPrice, profit });
+        position = 0;
+        entryPrice = 0;
+      }
+
+      // Track drawdown
+      const currentValue = position > 0 ? position * currentPrice : balance;
+      if (currentValue > peak) peak = currentValue;
+      const drawdown = (peak - currentValue) / peak * 100;
+      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+    }
+
+    // Close any remaining position at last price
+    if (position > 0) {
+      const lastPrice = candles[candles.length - 1].close;
+      const exitValue = position * lastPrice;
+      const profit = exitValue - (position * entryPrice);
+      balance = exitValue;
+      
+      if (profit > 0) winTrades++;
+      else lossTrades++;
+      
+      trades.push({ timestamp: candles[candles.length - 1].timestamp, side: 'ask', price: lastPrice, profit });
+    }
+
+    const initialBalance = params.targetAmount || 100000;
+    const totalProfit = balance - initialBalance;
+    const totalTrades = trades.length;
+
+    return {
+      totalTrades,
+      winTrades,
+      lossTrades,
+      winRate: totalTrades > 0 ? (winTrades / (winTrades + lossTrades)) * 100 : 0,
+      totalProfit,
+      maxDrawdown,
+      trades: trades.slice(-20), // Return last 20 trades
+    };
+  }
+
+  // Get trading statistics
+  async getStatistics(userId: string): Promise<{
+    daily: { date: string; profit: number; trades: number }[];
+    weekly: { week: string; profit: number; trades: number }[];
+    monthly: { month: string; profit: number; trades: number }[];
+    winRate: number;
+    avgProfit: number;
+    avgLoss: number;
+    profitFactor: number;
+    totalProfit: number;
+    bestTrade: number;
+    worstTrade: number;
+  }> {
+    const logs = await this.storage.getTradeLogs(userId);
+    const successLogs = logs.filter(l => l.status === 'success');
+
+    // Group by day/week/month
+    const dailyMap = new Map<string, { profit: number; trades: number }>();
+    const weeklyMap = new Map<string, { profit: number; trades: number }>();
+    const monthlyMap = new Map<string, { profit: number; trades: number }>();
+
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let wins = 0;
+    let losses = 0;
+    let bestTrade = 0;
+    let worstTrade = 0;
+
+    // Match buys with sells to calculate individual trade profits
+    const buyQueue: { price: number; volume: number; timestamp: Date }[] = [];
+    
+    for (const log of successLogs.sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime())) {
+      const price = parseFloat(String(log.price));
+      const volume = parseFloat(String(log.volume));
+      const timestamp = new Date(log.timestamp!);
+      
+      const dateKey = timestamp.toISOString().split('T')[0];
+      const weekNum = Math.floor(timestamp.getTime() / (7 * 24 * 60 * 60 * 1000));
+      const weekKey = `W${weekNum}`;
+      const monthKey = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, '0')}`;
+
+      if (log.side === 'bid') {
+        buyQueue.push({ price, volume, timestamp });
+      } else if (log.side === 'ask' && buyQueue.length > 0) {
+        const buy = buyQueue.shift()!;
+        const profit = (price - buy.price) * volume;
+        
+        if (profit > 0) {
+          totalProfit += profit;
+          wins++;
+          if (profit > bestTrade) bestTrade = profit;
+        } else {
+          totalLoss += Math.abs(profit);
+          losses++;
+          if (profit < worstTrade) worstTrade = profit;
+        }
+
+        // Update daily
+        if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { profit: 0, trades: 0 });
+        const daily = dailyMap.get(dateKey)!;
+        daily.profit += profit;
+        daily.trades++;
+
+        // Update weekly
+        if (!weeklyMap.has(weekKey)) weeklyMap.set(weekKey, { profit: 0, trades: 0 });
+        const weekly = weeklyMap.get(weekKey)!;
+        weekly.profit += profit;
+        weekly.trades++;
+
+        // Update monthly
+        if (!monthlyMap.has(monthKey)) monthlyMap.set(monthKey, { profit: 0, trades: 0 });
+        const monthly = monthlyMap.get(monthKey)!;
+        monthly.profit += profit;
+        monthly.trades++;
+      }
+    }
+
+    return {
+      daily: Array.from(dailyMap.entries()).map(([date, data]) => ({ date, ...data })).slice(-30),
+      weekly: Array.from(weeklyMap.entries()).map(([week, data]) => ({ week, ...data })).slice(-12),
+      monthly: Array.from(monthlyMap.entries()).map(([month, data]) => ({ month, ...data })).slice(-12),
+      winRate: (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0,
+      avgProfit: wins > 0 ? totalProfit / wins : 0,
+      avgLoss: losses > 0 ? totalLoss / losses : 0,
+      profitFactor: totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? 999 : 0,
+      totalProfit: totalProfit - totalLoss,
+      bestTrade,
+      worstTrade,
+    };
+  }
+
+  // Get advanced technical indicators for a market
+  async getAdvancedIndicators(market: string): Promise<{
+    macd: { line: number; signal: number; histogram: number };
+    stochastic: { k: number; d: number };
+    rsi: number;
+    sma5: number;
+    sma20: number;
+    ema12: number;
+    ema26: number;
+    bb: { upper: number; middle: number; lower: number };
+  }> {
+    const candles = await this.getCandles(market, 60);
+    if (candles.length < 26) {
+      return {
+        macd: { line: 0, signal: 0, histogram: 0 },
+        stochastic: { k: 50, d: 50 },
+        rsi: 50,
+        sma5: 0,
+        sma20: 0,
+        ema12: 0,
+        ema26: 0,
+        bb: { upper: 0, middle: 0, lower: 0 },
+      };
+    }
+
+    const prices = candles.map(c => c.close);
+    const { macdLine, signalLine, histogram } = this.calculateMACD(prices);
+    const stoch = this.calculateStochastic(candles);
+    const rsi = this.calculateRSI(prices, 14);
+    const sma5 = this.calculateSMA(prices, 5);
+    const sma20 = this.calculateSMA(prices, 20);
+    const ema = this.calculateEMA(prices, 12);
+    const ema26 = this.calculateEMA(prices, 26);
+    const bb = this.calculateBollingerBands(prices, 20, 2);
+
+    return {
+      macd: {
+        line: macdLine[macdLine.length - 1],
+        signal: signalLine[signalLine.length - 1],
+        histogram: histogram[histogram.length - 1],
+      },
+      stochastic: {
+        k: stoch.k[stoch.k.length - 1],
+        d: stoch.d[stoch.d.length - 1],
+      },
+      rsi,
+      sma5,
+      sma20,
+      ema12: ema[ema.length - 1],
+      ema26: ema26[ema26.length - 1],
+      bb,
+    };
+  }
+
   startLoop() {
     if (this.isRunning) return;
     this.isRunning = true;
