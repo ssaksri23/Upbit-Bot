@@ -134,6 +134,11 @@ export async function registerRoutes(
     res.json(candles);
   });
 
+  app.get(api.upbit.recommendations.path, async (req, res) => {
+    const recommendations = await upbitService.getRecommendations();
+    res.json(recommendations);
+  });
+
   app.get(api.upbit.status.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
     const marketOverride = req.query.market as string | undefined;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell, useCandles } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell, useCandles, useRecommendations } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,12 @@ import {
   TrendingUp,
   TrendingDown,
   PiggyBank,
-  BarChart3
+  BarChart3,
+  Star,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  RefreshCw
 } from "lucide-react";
 import {
   ComposedChart,
@@ -70,6 +75,7 @@ export default function Dashboard() {
   const manualBuy = useManualBuy();
   const manualSell = useManualSell();
   const { data: candles } = useCandles(formState.market, 60);
+  const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } = useRecommendations();
   const [buyAmount, setBuyAmount] = useState("10000");
 
   useEffect(() => {
@@ -300,6 +306,107 @@ export default function Dashboard() {
               {isKorean ? "최소 주문 금액: 5,000원" : "Min order: 5,000 KRW"}
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Star className="w-5 h-5 text-yellow-500" />
+              <CardTitle>{isKorean ? "추천 종목" : "Recommended Coins"}</CardTitle>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetchRecommendations()}
+              disabled={recommendationsLoading}
+              data-testid="button-refresh-recommendations"
+            >
+              <RefreshCw className={cn("w-4 h-4", recommendationsLoading && "animate-spin")} />
+            </Button>
+          </div>
+          <CardDescription>{isKorean ? "RSI, 거래량, 변동률 기반 분석" : "Analysis based on RSI, volume, and price changes"}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recommendationsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : recommendations && recommendations.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">{isKorean ? "종목" : "Coin"}</th>
+                    <th className="text-right py-2 px-2 font-medium text-muted-foreground">{isKorean ? "현재가" : "Price"}</th>
+                    <th className="text-right py-2 px-2 font-medium text-muted-foreground">{isKorean ? "변동률" : "Change"}</th>
+                    <th className="text-right py-2 px-2 font-medium text-muted-foreground">RSI</th>
+                    <th className="text-center py-2 px-2 font-medium text-muted-foreground">{isKorean ? "신호" : "Signal"}</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">{isKorean ? "사유" : "Reason"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recommendations.map((rec) => (
+                    <tr 
+                      key={rec.market} 
+                      className="border-b border-border/50 hover-elevate cursor-pointer"
+                      onClick={() => setFormState(prev => ({ ...prev, market: rec.market }))}
+                      data-testid={`recommendation-row-${rec.market}`}
+                    >
+                      <td className="py-2 px-2">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{isKorean ? rec.koreanName : rec.englishName}</span>
+                          <span className="text-xs text-muted-foreground">{rec.market}</span>
+                        </div>
+                      </td>
+                      <td className="text-right py-2 px-2 font-mono">
+                        {formatPrice(rec.currentPrice)}
+                      </td>
+                      <td className={cn(
+                        "text-right py-2 px-2 font-mono",
+                        rec.changeRate > 0 ? "text-green-500" : rec.changeRate < 0 ? "text-red-500" : ""
+                      )}>
+                        <div className="flex items-center justify-end gap-1">
+                          {rec.changeRate > 0 ? <ArrowUp className="w-3 h-3" /> : rec.changeRate < 0 ? <ArrowDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                          {rec.changeRate > 0 ? "+" : ""}{rec.changeRate.toFixed(2)}%
+                        </div>
+                      </td>
+                      <td className={cn(
+                        "text-right py-2 px-2 font-mono",
+                        rec.rsi < 30 ? "text-green-500" : rec.rsi > 70 ? "text-red-500" : "text-muted-foreground"
+                      )}>
+                        {rec.rsi}
+                      </td>
+                      <td className="text-center py-2 px-2">
+                        <span className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
+                          rec.signal === "strong_buy" && "bg-green-500/20 text-green-500",
+                          rec.signal === "buy" && "bg-green-500/10 text-green-400",
+                          rec.signal === "hold" && "bg-muted text-muted-foreground",
+                          rec.signal === "sell" && "bg-red-500/10 text-red-400",
+                          rec.signal === "strong_sell" && "bg-red-500/20 text-red-500"
+                        )}>
+                          {rec.signal === "strong_buy" && (isKorean ? "강력 매수" : "Strong Buy")}
+                          {rec.signal === "buy" && (isKorean ? "매수" : "Buy")}
+                          {rec.signal === "hold" && (isKorean ? "관망" : "Hold")}
+                          {rec.signal === "sell" && (isKorean ? "매도" : "Sell")}
+                          {rec.signal === "strong_sell" && (isKorean ? "강력 매도" : "Strong Sell")}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-muted-foreground text-xs">
+                        {rec.reason}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              {isKorean ? "추천 종목을 불러오는 중..." : "Loading recommendations..."}
+            </div>
+          )}
         </CardContent>
       </Card>
 

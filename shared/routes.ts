@@ -168,6 +168,23 @@ export const api = {
         },
       },
     },
+    recommendations: {
+      method: 'GET' as const,
+      path: '/api/upbit/recommendations',
+      responses: {
+        200: z.array(z.object({
+          market: z.string(),
+          koreanName: z.string(),
+          englishName: z.string(),
+          currentPrice: z.number(),
+          changeRate: z.number(),
+          volume24h: z.number(),
+          rsi: z.number(),
+          signal: z.enum(['strong_buy', 'buy', 'hold', 'sell', 'strong_sell']),
+          reason: z.string(),
+        })),
+      },
+    },
   },
   logs: {
     list: {

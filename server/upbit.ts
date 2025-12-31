@@ -335,6 +335,118 @@ export class UpbitService {
     }
   }
 
+  async getRecommendations(): Promise<{
+    market: string;
+    koreanName: string;
+    englishName: string;
+    currentPrice: number;
+    changeRate: number;
+    volume24h: number;
+    rsi: number;
+    signal: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell';
+    reason: string;
+  }[]> {
+    try {
+      // Get all KRW markets
+      const markets = await this.getMarkets();
+      
+      // Get ticker data for all markets
+      const marketCodes = markets.map(m => m.market).join(',');
+      const tickerRes = await axios.get(`${this.baseUrl}/ticker?markets=${marketCodes}`);
+      const tickers = tickerRes.data;
+
+      // Analyze top 20 by volume
+      const sortedByVolume = tickers
+        .sort((a: any, b: any) => b.acc_trade_price_24h - a.acc_trade_price_24h)
+        .slice(0, 20);
+
+      const recommendations = [];
+
+      for (const ticker of sortedByVolume) {
+        const marketInfo = markets.find(m => m.market === ticker.market);
+        if (!marketInfo) continue;
+
+        // Get candle data for RSI calculation
+        let rsi = 50;
+        try {
+          const candlesRes = await axios.get(
+            `${this.baseUrl}/candles/minutes/15?market=${ticker.market}&count=20`
+          );
+          const candles = candlesRes.data;
+          
+          if (candles.length >= 14) {
+            // Calculate RSI
+            let gains = 0, losses = 0;
+            for (let i = 1; i < Math.min(15, candles.length); i++) {
+              const change = candles[i - 1].trade_price - candles[i].trade_price;
+              if (change > 0) gains += change;
+              else losses -= change;
+            }
+            const avgGain = gains / 14;
+            const avgLoss = losses / 14;
+            const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            rsi = 100 - (100 / (1 + rs));
+          }
+        } catch (e) {
+          // Skip if candle fetch fails
+        }
+
+        const changeRate = ticker.signed_change_rate * 100;
+        
+        // Determine signal based on RSI and change rate
+        let signal: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell' = 'hold';
+        let reason = '';
+
+        if (rsi < 30 && changeRate < -3) {
+          signal = 'strong_buy';
+          reason = 'RSI 과매도 + 급락';
+        } else if (rsi < 30) {
+          signal = 'buy';
+          reason = 'RSI 과매도';
+        } else if (rsi > 70 && changeRate > 3) {
+          signal = 'strong_sell';
+          reason = 'RSI 과매수 + 급등';
+        } else if (rsi > 70) {
+          signal = 'sell';
+          reason = 'RSI 과매수';
+        } else if (changeRate < -5) {
+          signal = 'buy';
+          reason = '급락 반등 기대';
+        } else if (changeRate > 5) {
+          signal = 'sell';
+          reason = '급등 조정 예상';
+        } else {
+          signal = 'hold';
+          reason = '관망';
+        }
+
+        recommendations.push({
+          market: ticker.market,
+          koreanName: marketInfo.korean_name,
+          englishName: marketInfo.english_name,
+          currentPrice: ticker.trade_price,
+          changeRate,
+          volume24h: ticker.acc_trade_price_24h,
+          rsi: Math.round(rsi),
+          signal,
+          reason,
+        });
+
+        // Rate limit - avoid too many requests
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // Sort by signal priority
+      const signalPriority = { strong_buy: 0, buy: 1, hold: 2, sell: 3, strong_sell: 4 };
+      recommendations.sort((a, b) => signalPriority[a.signal] - signalPriority[b.signal]);
+
+      return recommendations;
+    } catch (e) {
+      console.error("Failed to get recommendations:", e);
+      return [];
+    }
+  }
+
   private async executePercentStrategy(settings: BotSettings) {
     if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
 

@@ -28,6 +28,19 @@ export function useCandles(market: string, count: number = 60) {
   });
 }
 
+export function useRecommendations() {
+  return useQuery({
+    queryKey: [api.upbit.recommendations.path],
+    queryFn: async () => {
+      const res = await fetch(api.upbit.recommendations.path);
+      if (!res.ok) throw new Error("Failed to fetch recommendations");
+      return api.upbit.recommendations.responses[200].parse(await res.json());
+    },
+    refetchInterval: 60000, // Refresh every 60 seconds
+    staleTime: 30000, // Consider stale after 30 seconds
+  });
+}
+
 export function useUpbitStatus(market?: string) {
   return useQuery({
     queryKey: [api.upbit.status.path, market],
