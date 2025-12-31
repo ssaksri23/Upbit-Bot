@@ -26,7 +26,7 @@ export class UpbitService {
       payload.query_hash_alg = "SHA512";
     }
 
-    return jwt.sign(payload, secretKey);
+    return jwt.sign(payload, secretKey, { algorithm: 'HS256' });
   }
 
   async getStatus(userId: string) {
@@ -87,7 +87,8 @@ export class UpbitService {
       }
       return { success: false, message: "계좌 정보를 가져올 수 없습니다" };
     } catch (e: any) {
-      console.error("API key verification failed:", e.response?.data || e.message);
+      console.error("API key verification failed - Full error:", JSON.stringify(e.response?.data, null, 2));
+      console.error("Status:", e.response?.status);
       const errorName = e.response?.data?.error?.name;
       const errorMsg = e.response?.data?.error?.message;
       
