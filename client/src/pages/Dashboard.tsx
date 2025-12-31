@@ -1227,34 +1227,14 @@ export default function Dashboard() {
       </div>
 
       <Card className="mt-8 border-yellow-500/30 bg-yellow-500/5">
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">
-                {isKorean ? "투자 위험 고지 및 면책 조항" : "Investment Risk Disclaimer"}
-              </p>
-              <p>
-                {isKorean 
-                  ? "본 서비스는 암호화폐 자동매매 보조 도구로서, 투자 조언을 제공하지 않습니다. 암호화폐 투자는 원금 손실의 위험이 있으며, 과거의 수익률이 미래의 수익을 보장하지 않습니다."
-                  : "This service is a cryptocurrency auto-trading assistant tool and does not provide investment advice. Cryptocurrency investments carry the risk of principal loss, and past performance does not guarantee future results."}
-              </p>
-              <p>
-                {isKorean 
-                  ? "사용자는 본 서비스 이용으로 인해 발생하는 모든 투자 손실에 대해 전적으로 본인이 책임지며, 서비스 제공자는 어떠한 투자 손실에 대해서도 법적 책임을 지지 않습니다."
-                  : "Users are solely responsible for all investment losses incurred from using this service. The service provider assumes no legal liability for any investment losses."}
-              </p>
-              <p>
-                {isKorean 
-                  ? "자동매매 봇은 시장 상황, 네트워크 지연, API 오류 등으로 인해 예상과 다르게 작동할 수 있습니다. 투자 결정은 신중하게 본인의 판단 하에 이루어져야 합니다."
-                  : "The auto-trading bot may operate differently than expected due to market conditions, network delays, API errors, etc. Investment decisions should be made carefully based on your own judgment."}
-              </p>
-              <p className="text-xs">
-                {isKorean 
-                  ? "본 서비스를 이용함으로써 위 면책 조항에 동의하는 것으로 간주됩니다."
-                  : "By using this service, you are deemed to agree to the above disclaimer."}
-              </p>
-            </div>
+        <CardContent className="py-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+            <span>
+              {isKorean 
+                ? "투자 손실은 본인 책임이며, 서비스 제공자는 법적 책임을 지지 않습니다."
+                : "Investment losses are your responsibility. The service provider assumes no liability."}
+            </span>
           </div>
         </CardContent>
       </Card>
