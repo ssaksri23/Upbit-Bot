@@ -355,10 +355,10 @@ export class UpbitService {
       const tickerRes = await axios.get(`${this.baseUrl}/ticker?markets=${marketCodes}`);
       const tickers = tickerRes.data;
 
-      // Analyze top 20 by volume
+      // Analyze top 10 by volume
       const sortedByVolume = tickers
         .sort((a: any, b: any) => b.acc_trade_price_24h - a.acc_trade_price_24h)
-        .slice(0, 20);
+        .slice(0, 10);
 
       const recommendations = [];
 
