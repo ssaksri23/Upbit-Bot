@@ -62,6 +62,12 @@ const resources = {
         auto: "Automated",
         autoDesc: "24/7 trading",
       },
+      settings: {
+        saved: "Settings Saved",
+        savedDesc: "Your bot configuration has been updated.",
+        error: "Error",
+        errorDesc: "Failed to save settings. Please try again.",
+      },
       columns: {
         time: "Time",
         side: "Side",
@@ -135,6 +141,12 @@ const resources = {
         secureDesc: "암호화된 저장소",
         auto: "자동화",
         autoDesc: "24시간 거래",
+      },
+      settings: {
+        saved: "설정 저장 완료",
+        savedDesc: "봇 설정이 저장되었습니다.",
+        error: "오류",
+        errorDesc: "설정 저장에 실패했습니다. 다시 시도해주세요.",
       },
       columns: {
         time: "시간",

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import { InsertBotSettings } from "@shared/schema";
 
 export function useUpbitStatus() {
@@ -31,6 +32,7 @@ export function useBotSettings() {
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: async (data: Partial<InsertBotSettings> & { upbitAccessKey?: string; upbitSecretKey?: string }) => {
@@ -47,14 +49,14 @@ export function useUpdateSettings() {
       queryClient.invalidateQueries({ queryKey: [api.upbit.settings.get.path] });
       queryClient.invalidateQueries({ queryKey: [api.upbit.status.path] });
       toast({
-        title: "Settings Saved",
-        description: "Your bot configuration has been updated.",
+        title: t("settings.saved"),
+        description: t("settings.savedDesc"),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to save settings. Please try again.",
+        title: t("settings.error"),
+        description: t("settings.errorDesc"),
         variant: "destructive",
       });
     },
