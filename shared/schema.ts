@@ -39,6 +39,10 @@ export const botSettings = pgTable("bot_settings", {
   
   upbitAccessKey: text("upbit_access_key"),
   upbitSecretKey: text("upbit_secret_key"),
+  
+  // Trading state (persisted for restart recovery)
+  referencePrice: numeric("reference_price"),
+  lastTradeTime: timestamp("last_trade_time"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
