@@ -182,7 +182,7 @@ export async function registerRoutes(
       const updates = { ...req.body };
       
       // Validate strategy if provided
-      const validStrategies = ["percent", "grid", "dca"];
+      const validStrategies = ["percent", "grid", "dca", "rsi", "ma", "bollinger"];
       if (updates.strategy && !validStrategies.includes(updates.strategy)) {
         return res.status(400).json({ message: "Invalid strategy value" });
       }
