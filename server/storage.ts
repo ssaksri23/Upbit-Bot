@@ -1,38 +1,71 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import {
+  tradeLogs,
+  botSettings,
+  type InsertTradeLog,
+  type InsertBotSettings,
+  type TradeLog,
+  type BotSettings
+} from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Logs
+  getTradeLogs(): Promise<TradeLog[]>;
+  createTradeLog(log: InsertTradeLog): Promise<TradeLog>;
+
+  // Settings
+  getBotSettings(): Promise<BotSettings | undefined>;
+  updateBotSettings(settings: Partial<InsertBotSettings>): Promise<BotSettings>;
+  initializeSettings(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getTradeLogs(): Promise<TradeLog[]> {
+    return await db.select().from(tradeLogs).orderBy(desc(tradeLogs.timestamp)).limit(50);
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async createTradeLog(log: InsertTradeLog): Promise<TradeLog> {
+    const [newLog] = await db.insert(tradeLogs).values(log).returning();
+    return newLog;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getBotSettings(): Promise<BotSettings | undefined> {
+    const [settings] = await db.select().from(botSettings).limit(1);
+    return settings;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async updateBotSettings(settings: Partial<InsertBotSettings>): Promise<BotSettings> {
+    const existing = await this.getBotSettings();
+    if (existing) {
+      const [updated] = await db
+        .update(botSettings)
+        .set(settings)
+        .where(eq(botSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(botSettings).values({
+        isActive: false,
+        market: "KRW-BTC",
+        ...settings
+      } as InsertBotSettings).returning();
+      return created;
+    }
+  }
+
+  async initializeSettings(): Promise<void> {
+    const existing = await this.getBotSettings();
+    if (!existing) {
+      await db.insert(botSettings).values({
+        isActive: false,
+        market: "KRW-BTC",
+        buyThreshold: "0.5",
+        sellThreshold: "0.5",
+        targetAmount: "10000"
+      });
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
