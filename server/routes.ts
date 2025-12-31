@@ -166,12 +166,35 @@ export async function registerRoutes(
       if (!userId) {
         return res.status(401).json({ message: "Invalid user session" });
       }
-      const updates = req.body;
+      const updates = { ...req.body };
       
       // Validate strategy if provided
       const validStrategies = ["percent", "grid", "dca"];
       if (updates.strategy && !validStrategies.includes(updates.strategy)) {
         return res.status(400).json({ message: "Invalid strategy value" });
+      }
+      
+      // Validate and normalize numeric fields
+      if (updates.buyThreshold !== undefined) {
+        const val = parseFloat(updates.buyThreshold);
+        if (isNaN(val) || val < 0 || val > 100) {
+          return res.status(400).json({ message: "Invalid buyThreshold value" });
+        }
+        updates.buyThreshold = String(val);
+      }
+      if (updates.sellThreshold !== undefined) {
+        const val = parseFloat(updates.sellThreshold);
+        if (isNaN(val) || val < 0 || val > 100) {
+          return res.status(400).json({ message: "Invalid sellThreshold value" });
+        }
+        updates.sellThreshold = String(val);
+      }
+      if (updates.targetAmount !== undefined) {
+        const val = parseFloat(updates.targetAmount);
+        if (isNaN(val) || val < 0) {
+          return res.status(400).json({ message: "Invalid targetAmount value" });
+        }
+        updates.targetAmount = String(val);
       }
       
       await storage.updateBotSettings(userId, updates);

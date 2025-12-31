@@ -9,12 +9,13 @@ interface StatusCardProps {
   description?: string;
   trend?: "up" | "down" | "neutral";
   className?: string;
+  testId?: string;
 }
 
-export function StatusCard({ title, value, icon: Icon, description, trend, className }: StatusCardProps) {
+export function StatusCard({ title, value, icon: Icon, description, trend, className, testId }: StatusCardProps) {
   return (
-    <Card className={cn("overflow-hidden", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <Card className={cn("overflow-hidden", className)} data-testid={testId}>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
@@ -26,7 +27,7 @@ export function StatusCard({ title, value, icon: Icon, description, trend, class
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold font-mono">{value}</div>
+        <div className="text-2xl font-bold font-mono" data-testid={testId ? `${testId}-value` : undefined}>{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">
             {description}

@@ -78,6 +78,15 @@ export default function Dashboard() {
       ...formState,
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
+    }, {
+      onSuccess: () => {
+        // Clear API key fields after successful save
+        setFormState(prev => ({
+          ...prev,
+          upbitAccessKey: "",
+          upbitSecretKey: "",
+        }));
+      }
     });
   };
 
@@ -107,6 +116,7 @@ export default function Dashboard() {
           icon={Power}
           trend={settings?.isActive ? "up" : "neutral"}
           className={settings?.isActive ? "border-primary/50 bg-primary/5" : ""}
+          testId="card-bot-status"
         />
         <StatusCard
           title={isKorean ? (selectedMarket?.korean_name || coinSymbol) : (selectedMarket?.english_name || coinSymbol)}
@@ -114,18 +124,21 @@ export default function Dashboard() {
           icon={Activity}
           trend="up"
           description={formState.market}
+          testId="card-current-price"
         />
         <StatusCard
           title={t('dashboard.balance')}
           value={status?.balanceKRW ? formatPrice(status.balanceKRW) : "0"}
           icon={Wallet}
           description="KRW"
+          testId="card-krw-balance"
         />
         <StatusCard
           title={t('dashboard.holdings')}
           value={status?.balanceCoin ? Number(status.balanceCoin).toFixed(8) : "0"}
           icon={Coins}
           description={coinSymbol}
+          testId="card-coin-holdings"
         />
         <StatusCard
           title={t('dashboard.totalAsset')}
@@ -133,6 +146,7 @@ export default function Dashboard() {
           icon={PiggyBank}
           description="KRW"
           trend="up"
+          testId="card-total-assets"
         />
       </div>
 
@@ -252,11 +266,11 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-2">
                 <Label className="font-semibold">API Keys</Label>
                 {settings?.hasAccessKey ? (
-                  <span className="text-xs flex items-center gap-1 text-green-500">
+                  <span className="text-xs flex items-center gap-1 text-green-500" data-testid="status-api-key-set">
                     <CheckCircle2 className="w-3 h-3" /> {t('dashboard.keySet')}
                   </span>
                 ) : (
-                  <span className="text-xs flex items-center gap-1 text-yellow-500">
+                  <span className="text-xs flex items-center gap-1 text-yellow-500" data-testid="status-api-key-not-set">
                     <AlertCircle className="w-3 h-3" /> {t('dashboard.keyNotSet')}
                   </span>
                 )}
@@ -303,9 +317,9 @@ export default function Dashboard() {
         </Card>
 
         <div className="lg:col-span-2 space-y-8">
-          <Card className="h-[400px] flex flex-col">
+          <Card className="h-[400px] flex flex-col" data-testid="card-price-chart">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2" data-testid="text-chart-title">
                 <TrendingUp className="w-5 h-5" />
                 {isKorean ? selectedMarket?.korean_name : selectedMarket?.english_name} ({formState.market})
               </CardTitle>
@@ -344,7 +358,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="overflow-x-auto">
                 {(!logs || logs.length === 0) ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-muted-foreground" data-testid="text-no-trades">
                     {t('dashboard.noTrades')}
                   </div>
                 ) : (
@@ -358,31 +372,32 @@ export default function Dashboard() {
                         <th className="py-2 font-medium text-muted-foreground">{t('columns.status')}</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {logs.map((log) => (
+                    <tbody data-testid="trades-table-body">
+                      {logs.map((log, idx) => (
                         <motion.tr 
                           key={log.id} 
                           className="border-b border-border/50"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
+                          data-testid={`row-trade-${idx}`}
                         >
-                          <td className="py-3 font-mono text-xs">
+                          <td className="py-3 font-mono text-xs" data-testid={`text-time-${idx}`}>
                             {log.timestamp ? format(new Date(log.timestamp), 'MM-dd HH:mm:ss') : '-'}
                           </td>
                           <td className={cn(
                             "py-3 font-bold",
                             log.side === 'bid' ? "text-green-500" : 
                             log.side === 'ask' ? "text-red-500" : "text-blue-500"
-                          )}>
+                          )} data-testid={`text-side-${idx}`}>
                             {t(`sides.${log.side}`)}
                           </td>
-                          <td className="py-3 font-mono">{Number(log.price).toLocaleString()}</td>
-                          <td className="py-3 font-mono">{log.volume}</td>
+                          <td className="py-3 font-mono" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
+                          <td className="py-3 font-mono" data-testid={`text-volume-${idx}`}>{log.volume}</td>
                           <td className="py-3">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-xs font-medium",
                               log.status === 'success' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-                            )}>
+                            )} data-testid={`status-trade-${idx}`}>
                               {log.status}
                             </span>
                           </td>
