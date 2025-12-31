@@ -129,11 +129,12 @@ export default function Dashboard() {
           testId="card-current-price"
         />
         <StatusCard
-          title={t('dashboard.balance')}
-          value={status?.balanceKRW ? formatPrice(status.balanceKRW) : "0"}
-          icon={Wallet}
-          description="KRW"
-          testId="card-krw-balance"
+          title={t('dashboard.totalAsset')}
+          value={status?.totalAssetKRW ? formatPrice(status.totalAssetKRW) : "0"}
+          icon={PiggyBank}
+          description={isKorean ? "원화 + 코인" : "KRW + Coin"}
+          trend="up"
+          testId="card-total-assets"
         />
         <StatusCard
           title={t('dashboard.holdings')}
@@ -141,14 +142,6 @@ export default function Dashboard() {
           icon={Coins}
           description={coinSymbol}
           testId="card-coin-holdings"
-        />
-        <StatusCard
-          title={t('dashboard.totalAsset')}
-          value={status?.totalAssetKRW ? formatPrice(status.totalAssetKRW) : "0"}
-          icon={PiggyBank}
-          description="KRW"
-          trend="up"
-          testId="card-total-assets"
         />
       </div>
 
