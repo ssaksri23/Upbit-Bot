@@ -66,11 +66,20 @@ export class DatabaseStorage implements IStorage {
       throw new Error("User ID is required to update bot settings");
     }
     
+    // Trim whitespace from API keys
+    const cleanedSettings = { ...settings };
+    if (cleanedSettings.upbitAccessKey) {
+      cleanedSettings.upbitAccessKey = cleanedSettings.upbitAccessKey.trim();
+    }
+    if (cleanedSettings.upbitSecretKey) {
+      cleanedSettings.upbitSecretKey = cleanedSettings.upbitSecretKey.trim();
+    }
+    
     const existing = await this.getBotSettings(userId);
     if (existing) {
       const [updated] = await db
         .update(botSettings)
-        .set(settings)
+        .set(cleanedSettings)
         .where(eq(botSettings.id, existing.id))
         .returning();
       return updated;
@@ -79,7 +88,7 @@ export class DatabaseStorage implements IStorage {
         userId,
         isActive: false,
         market: "KRW-BTC",
-        ...settings
+        ...cleanedSettings
       } as InsertBotSettings).returning();
       return created;
     }
