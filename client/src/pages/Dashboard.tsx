@@ -36,9 +36,12 @@ import { motion } from "framer-motion";
 import { format } from "date-fns";
 
 const STRATEGIES = [
-  { value: "percent", label: "변동률 매매", labelEn: "Percent Trading", desc: "일정 비율 변동 시 매수/매도" },
-  { value: "grid", label: "그리드 매매", labelEn: "Grid Trading", desc: "가격 구간별 분할 매매" },
-  { value: "dca", label: "DCA 적립식", labelEn: "DCA", desc: "정기적 분할 매수" },
+  { value: "percent", label: "변동률 매매", labelEn: "Percent Trading", desc: "일정 비율 변동 시 매수/매도", descEn: "Buy on drops, sell on rises" },
+  { value: "grid", label: "그리드 매매", labelEn: "Grid Trading", desc: "가격 구간별 분할 매매", descEn: "Trade at price grid levels" },
+  { value: "dca", label: "DCA 적립식", labelEn: "DCA", desc: "정기적 분할 매수", descEn: "Regular interval buying" },
+  { value: "rsi", label: "RSI 전략", labelEn: "RSI Strategy", desc: "과매수/과매도 지표 기반", descEn: "Buy oversold, sell overbought" },
+  { value: "ma", label: "이동평균선", labelEn: "Moving Average", desc: "골든크로스/데드크로스", descEn: "Golden/Death cross signals" },
+  { value: "bollinger", label: "볼린저 밴드", labelEn: "Bollinger Bands", desc: "밴드 상단/하단 터치 시 매매", descEn: "Trade at band touches" },
 ];
 
 export default function Dashboard() {
@@ -211,7 +214,7 @@ export default function Dashboard() {
                     <SelectItem key={s.value} value={s.value} data-testid={`strategy-option-${s.value}`}>
                       <div className="flex flex-col">
                         <span>{isKorean ? s.label : s.labelEn}</span>
-                        <span className="text-xs text-muted-foreground">{s.desc}</span>
+                        <span className="text-xs text-muted-foreground">{isKorean ? s.desc : s.descEn}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -219,10 +222,10 @@ export default function Dashboard() {
               </Select>
             </div>
 
-            {formState.strategy === "percent" && (
+            {(formState.strategy === "percent" || formState.strategy === "grid") && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{t('dashboard.buyThreshold')}</Label>
+                  <Label>{formState.strategy === "grid" ? (isKorean ? "그리드 간격" : "Grid Step") : t('dashboard.buyThreshold')}</Label>
                   <div className="relative">
                     <Input 
                       type="number"
@@ -233,18 +236,104 @@ export default function Dashboard() {
                     <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
                   </div>
                 </div>
+                {formState.strategy === "percent" && (
+                  <div className="space-y-2">
+                    <Label>{t('dashboard.sellThreshold')}</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number"
+                        value={formState.sellThreshold}
+                        onChange={e => setFormState({...formState, sellThreshold: e.target.value})}
+                        data-testid="input-sell-threshold"
+                      />
+                      <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formState.strategy === "rsi" && (
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{t('dashboard.sellThreshold')}</Label>
+                  <Label>{isKorean ? "매수 RSI" : "Buy RSI"}</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number"
+                      value={formState.buyThreshold}
+                      onChange={e => setFormState({...formState, buyThreshold: e.target.value})}
+                      placeholder="30"
+                      data-testid="input-rsi-buy"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{isKorean ? "RSI가 이 값 이하일 때 매수" : "Buy when RSI below this"}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{isKorean ? "매도 RSI" : "Sell RSI"}</Label>
                   <div className="relative">
                     <Input 
                       type="number"
                       value={formState.sellThreshold}
                       onChange={e => setFormState({...formState, sellThreshold: e.target.value})}
-                      data-testid="input-sell-threshold"
+                      placeholder="70"
+                      data-testid="input-rsi-sell"
                     />
-                    <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{isKorean ? "RSI가 이 값 이상일 때 매도" : "Sell when RSI above this"}</p>
+                </div>
+              </div>
+            )}
+
+            {formState.strategy === "ma" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{isKorean ? "단기 이평선" : "Short MA"}</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number"
+                      value={formState.buyThreshold}
+                      onChange={e => setFormState({...formState, buyThreshold: e.target.value})}
+                      placeholder="5"
+                      data-testid="input-ma-short"
+                    />
+                    <span className="absolute right-3 top-2 text-sm text-muted-foreground">{isKorean ? "분" : "min"}</span>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>{isKorean ? "장기 이평선" : "Long MA"}</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number"
+                      value={formState.sellThreshold}
+                      onChange={e => setFormState({...formState, sellThreshold: e.target.value})}
+                      placeholder="20"
+                      data-testid="input-ma-long"
+                    />
+                    <span className="absolute right-3 top-2 text-sm text-muted-foreground">{isKorean ? "분" : "min"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formState.strategy === "bollinger" && (
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <p className="font-medium mb-1">{isKorean ? "볼린저 밴드 전략" : "Bollinger Bands Strategy"}</p>
+                <p className="text-muted-foreground">
+                  {isKorean 
+                    ? "20분 이동평균선 기준 상/하단 밴드 터치 시 자동 매매 (2 표준편차)" 
+                    : "Auto trades when price touches upper/lower bands (20-period SMA, 2 std dev)"}
+                </p>
+              </div>
+            )}
+
+            {formState.strategy === "dca" && (
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <p className="font-medium mb-1">{isKorean ? "DCA 적립식 매수" : "DCA Strategy"}</p>
+                <p className="text-muted-foreground">
+                  {isKorean 
+                    ? "1시간마다 설정한 금액으로 자동 매수합니다" 
+                    : "Automatically buys the target amount every hour"}
+                </p>
               </div>
             )}
 

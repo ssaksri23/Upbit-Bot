@@ -6,10 +6,19 @@ import querystring from "querystring";
 import { IStorage } from "./storage";
 import { BotSettings } from "@shared/schema";
 
+interface CandleData {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 export class UpbitService {
   private storage: IStorage;
   private baseUrl = "https://api.upbit.com/v1";
   private isRunning = false;
+  private priceHistory: Map<string, CandleData[]> = new Map(); // market -> candles
 
   constructor(storage: IStorage) {
     this.storage = storage;
@@ -55,6 +64,70 @@ export class UpbitService {
       console.error(`Failed to fetch price for ${market}:`, e);
       return 0;
     }
+  }
+
+  // Fetch minute candles for technical analysis
+  async getCandles(market: string, count: number = 60): Promise<CandleData[]> {
+    try {
+      const res = await axios.get(`${this.baseUrl}/candles/minutes/1?market=${market}&count=${count}`);
+      return res.data.map((c: any) => ({
+        timestamp: new Date(c.candle_date_time_kst).getTime(),
+        open: c.opening_price,
+        high: c.high_price,
+        low: c.low_price,
+        close: c.trade_price,
+      })).reverse(); // Oldest first
+    } catch (e) {
+      console.error(`Failed to fetch candles for ${market}:`, e);
+      return [];
+    }
+  }
+
+  // Calculate RSI (Relative Strength Index)
+  private calculateRSI(prices: number[], period: number = 14): number {
+    if (prices.length < period + 1) return 50; // Not enough data
+
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = prices.length - period; i < prices.length; i++) {
+      const change = prices[i] - prices[i - 1];
+      if (change > 0) gains += change;
+      else losses += Math.abs(change);
+    }
+
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  // Calculate Simple Moving Average
+  private calculateSMA(prices: number[], period: number): number {
+    if (prices.length < period) return prices[prices.length - 1] || 0;
+    const slice = prices.slice(-period);
+    return slice.reduce((sum, p) => sum + p, 0) / period;
+  }
+
+  // Calculate Bollinger Bands
+  private calculateBollingerBands(prices: number[], period: number = 20, stdDev: number = 2): { upper: number; middle: number; lower: number } {
+    const sma = this.calculateSMA(prices, period);
+    
+    if (prices.length < period) {
+      return { upper: sma, middle: sma, lower: sma };
+    }
+
+    const slice = prices.slice(-period);
+    const variance = slice.reduce((sum, p) => sum + Math.pow(p - sma, 2), 0) / period;
+    const std = Math.sqrt(variance);
+
+    return {
+      upper: sma + (stdDev * std),
+      middle: sma,
+      lower: sma - (stdDev * std),
+    };
   }
 
   async getAccountBalance(accessKey: string, secretKey: string, currency: string): Promise<number> {
@@ -470,6 +543,219 @@ export class UpbitService {
     }
   }
 
+  // RSI Strategy: Buy when oversold (RSI < 30), sell when overbought (RSI > 70)
+  private async executeRSIStrategy(settings: BotSettings) {
+    if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
+
+    const userId = settings.userId;
+    const market = settings.market;
+    const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const buyThreshold = parseFloat(settings.buyThreshold || "30"); // RSI buy level
+    const sellThreshold = parseFloat(settings.sellThreshold || "70"); // RSI sell level
+
+    // Prevent rapid trading
+    const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
+    if (Date.now() - lastTradeTime < 60000) return; // Min 1 minute between trades
+
+    const candles = await this.getCandles(market, 30);
+    if (candles.length < 15) return;
+
+    const prices = candles.map(c => c.close);
+    const currentPrice = prices[prices.length - 1];
+    const rsi = this.calculateRSI(prices, 14);
+
+    const coinSymbol = market.split("-")[1];
+
+    // Oversold - Buy signal
+    if (rsi < buyThreshold) {
+      const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
+      
+      if (krwBalance >= targetAmount) {
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal`);
+        
+        const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "bid",
+          price: String(currentPrice),
+          volume: String(targetAmount / currentPrice),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `RSI 매수 (RSI=${rsi.toFixed(1)}): ${targetAmount.toLocaleString()}원` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+    // Overbought - Sell signal
+    else if (rsi > sellThreshold) {
+      const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
+      const minOrderValue = 5000;
+      
+      if (coinBalance * currentPrice >= minOrderValue) {
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal`);
+        
+        const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "ask",
+          price: String(currentPrice),
+          volume: String(coinBalance),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `RSI 매도 (RSI=${rsi.toFixed(1)}): ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+  }
+
+  // Moving Average Crossover Strategy: Buy when short MA crosses above long MA
+  private async executeMAStrategy(settings: BotSettings) {
+    if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
+
+    const userId = settings.userId;
+    const market = settings.market;
+    const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const shortPeriod = Math.floor(parseFloat(settings.buyThreshold || "5")); // Short MA period
+    const longPeriod = Math.floor(parseFloat(settings.sellThreshold || "20")); // Long MA period
+
+    // Prevent rapid trading
+    const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
+    if (Date.now() - lastTradeTime < 60000) return;
+
+    const candles = await this.getCandles(market, 60);
+    if (candles.length < longPeriod + 2) return;
+
+    const prices = candles.map(c => c.close);
+    const currentPrice = prices[prices.length - 1];
+    
+    // Calculate current and previous MAs
+    const shortMA = this.calculateSMA(prices, shortPeriod);
+    const longMA = this.calculateSMA(prices, longPeriod);
+    const prevShortMA = this.calculateSMA(prices.slice(0, -1), shortPeriod);
+    const prevLongMA = this.calculateSMA(prices.slice(0, -1), longPeriod);
+
+    const coinSymbol = market.split("-")[1];
+
+    // Golden Cross: Short MA crosses above Long MA - Buy signal
+    if (prevShortMA <= prevLongMA && shortMA > longMA) {
+      const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
+      
+      if (krwBalance >= targetAmount) {
+        console.log(`[BOT ${userId}] MA Golden Cross - BUY signal (Short:${shortMA.toFixed(0)} > Long:${longMA.toFixed(0)})`);
+        
+        const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "bid",
+          price: String(currentPrice),
+          volume: String(targetAmount / currentPrice),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `MA 골든크로스 매수: ${targetAmount.toLocaleString()}원` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+    // Death Cross: Short MA crosses below Long MA - Sell signal
+    else if (prevShortMA >= prevLongMA && shortMA < longMA) {
+      const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
+      const minOrderValue = 5000;
+      
+      if (coinBalance * currentPrice >= minOrderValue) {
+        console.log(`[BOT ${userId}] MA Death Cross - SELL signal (Short:${shortMA.toFixed(0)} < Long:${longMA.toFixed(0)})`);
+        
+        const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "ask",
+          price: String(currentPrice),
+          volume: String(coinBalance),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `MA 데드크로스 매도: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+  }
+
+  // Bollinger Bands Strategy: Buy at lower band, sell at upper band
+  private async executeBollingerStrategy(settings: BotSettings) {
+    if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
+
+    const userId = settings.userId;
+    const market = settings.market;
+    const targetAmount = parseFloat(settings.targetAmount || "10000");
+
+    // Prevent rapid trading
+    const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
+    if (Date.now() - lastTradeTime < 60000) return;
+
+    const candles = await this.getCandles(market, 30);
+    if (candles.length < 20) return;
+
+    const prices = candles.map(c => c.close);
+    const currentPrice = prices[prices.length - 1];
+    const bands = this.calculateBollingerBands(prices, 20, 2);
+
+    const coinSymbol = market.split("-")[1];
+
+    // Price touches lower band - Buy signal
+    if (currentPrice <= bands.lower) {
+      const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
+      
+      if (krwBalance >= targetAmount) {
+        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} <= Lower ${bands.lower.toFixed(0)} - BUY`);
+        
+        const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "bid",
+          price: String(currentPrice),
+          volume: String(targetAmount / currentPrice),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `볼린저 하단 매수: ${targetAmount.toLocaleString()}원` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+    // Price touches upper band - Sell signal
+    else if (currentPrice >= bands.upper) {
+      const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
+      const minOrderValue = 5000;
+      
+      if (coinBalance * currentPrice >= minOrderValue) {
+        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} >= Upper ${bands.upper.toFixed(0)} - SELL`);
+        
+        const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
+
+        await this.storage.createTradeLog({
+          userId, market, side: "ask",
+          price: String(currentPrice),
+          volume: String(coinBalance),
+          status: result.success ? "success" : "failed",
+          message: result.success ? `볼린저 상단 매도: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+        });
+
+        if (result.success) {
+          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+        }
+      }
+    }
+  }
+
   startLoop() {
     if (this.isRunning) return;
     this.isRunning = true;
@@ -494,6 +780,15 @@ export class UpbitService {
               break;
             case "grid":
               await this.executeGridStrategy(settings);
+              break;
+            case "rsi":
+              await this.executeRSIStrategy(settings);
+              break;
+            case "ma":
+              await this.executeMAStrategy(settings);
+              break;
+            case "bollinger":
+              await this.executeBollingerStrategy(settings);
               break;
           }
         }
