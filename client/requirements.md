@@ -1,14 +1,14 @@
 ## Packages
-recharts | For visualizing price history and market data
-framer-motion | For smooth page transitions and micro-interactions
-clsx | For conditional class merging
-tailwind-merge | For merging tailwind classes intelligently
+i18next | Internationalization framework
+react-i18next | React bindings for i18next
+i18next-browser-languagedetector | Language detection
+recharts | Data visualization for price charts
+framer-motion | Animation library for smooth transitions
+clsx | Utility for constructing className strings conditionally
+tailwind-merge | Utility for merging Tailwind CSS classes
+lucide-react | Icon library
 
 ## Notes
-Tailwind Config - extend fontFamily:
-fontFamily: {
-  sans: ["'Plus Jakarta Sans'", "sans-serif"],
-  mono: ["'JetBrains Mono'", "monospace"],
-}
-Dashboard needs to poll /api/upbit/status every 2 seconds.
-Trade logs are fetched from /api/logs.
+- Dashboard requires polling /api/upbit/status every 2 seconds.
+- Multi-language support (English/Korean) required.
+- Authentication via Replit Auth (/api/auth/me).

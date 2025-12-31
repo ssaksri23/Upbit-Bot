@@ -3,51 +3,87 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { UpbitService } from "./upbit";
+import { setupAuth } from "./replit_integrations/auth";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Initialize default settings
-  await storage.initializeSettings();
+  // Setup Auth first
+  await setupAuth(app);
 
-  // Instantiate Upbit Service (simulated if no keys)
   const upbitService = new UpbitService(storage);
-  upbitService.startLoop(); // Start the background monitoring loop
+  upbitService.startLoop();
 
-  // API Routes
-  app.get(api.upbit.status.path, async (req, res) => {
-    const status = await upbitService.getStatus();
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    next();
+  };
+
+  app.get(api.upbit.status.path, requireAuth, async (req, res) => {
+    // @ts-ignore
+    const status = await upbitService.getStatus(req.user!.id);
     res.json(status);
   });
 
-  app.get(api.upbit.settings.get.path, async (req, res) => {
-    const settings = await storage.getBotSettings();
-    if (!settings) return res.status(404).send("Settings not found");
+  app.get(api.upbit.settings.get.path, requireAuth, async (req, res) => {
+    // @ts-ignore
+    const settings = await storage.getBotSettings(req.user!.id);
+    if (!settings) {
+       return res.json({
+         isActive: false,
+         market: "KRW-BTC",
+         buyThreshold: "0.5",
+         sellThreshold: "0.5",
+         targetAmount: "10000",
+         hasAccessKey: false,
+         hasSecretKey: false,
+       });
+    }
     res.json({
       isActive: settings.isActive,
       market: settings.market,
       buyThreshold: settings.buyThreshold,
       sellThreshold: settings.sellThreshold,
-      targetAmount: settings.targetAmount
+      targetAmount: settings.targetAmount,
+      hasAccessKey: !!settings.upbitAccessKey,
+      hasSecretKey: !!settings.upbitSecretKey,
     });
   });
 
-  app.post(api.upbit.settings.update.path, async (req, res) => {
+  app.post(api.upbit.settings.update.path, requireAuth, async (req, res) => {
     const updates = req.body;
-    await storage.updateBotSettings(updates);
+    // @ts-ignore
+    await storage.updateBotSettings(req.user!.id, updates);
     res.json({ success: true });
   });
 
-  app.post(api.upbit.toggle.path, async (req, res) => {
-    const { isActive } = req.body;
-    await storage.updateBotSettings({ isActive });
-    res.json({ success: true, isActive });
+  app.get(api.logs.list.path, requireAuth, async (req, res) => {
+    // @ts-ignore
+    const logs = await storage.getTradeLogs(req.user!.id);
+    res.json(logs);
+  });
+  
+  // Replit Auth User endpoint
+  app.get(api.auth.me.path, (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.json(null);
+    }
+    const user = req.user as any;
+    res.json({
+      id: user.id,
+      username: user.username || user.email,
+      displayName: user.displayName || user.firstName
+    });
   });
 
-  app.get(api.logs.list.path, async (req, res) => {
-    const logs = await storage.getTradeLogs();
-    res.json(logs);
+  app.post(api.auth.logout.path, (req, res) => {
+    req.logout((err) => {
+      if (err) return res.status(500).json({ success: false });
+      res.json({ success: true });
+    });
   });
 
   return httpServer;

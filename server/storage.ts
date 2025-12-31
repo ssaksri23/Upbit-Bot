@@ -1,28 +1,38 @@
 import { db } from "./db";
 import {
-  tradeLogs,
-  botSettings,
-  type InsertTradeLog,
-  type InsertBotSettings,
-  type TradeLog,
-  type BotSettings
+  users, tradeLogs, botSettings,
+  type User, type InsertUser,
+  type InsertTradeLog, type InsertBotSettings,
+  type TradeLog, type BotSettings
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
+  // Users (Managed by Replit Auth mostly, but exposed here)
+  getUserByUsername(username: string): Promise<User | undefined>;
+  
   // Logs
-  getTradeLogs(): Promise<TradeLog[]>;
+  getTradeLogs(userId: string): Promise<TradeLog[]>;
   createTradeLog(log: InsertTradeLog): Promise<TradeLog>;
 
   // Settings
-  getBotSettings(): Promise<BotSettings | undefined>;
-  updateBotSettings(settings: Partial<InsertBotSettings>): Promise<BotSettings>;
-  initializeSettings(): Promise<void>;
+  getBotSettings(userId: string): Promise<BotSettings | undefined>;
+  updateBotSettings(userId: string, settings: Partial<InsertBotSettings>): Promise<BotSettings>;
+  getAllActiveSettings(): Promise<BotSettings[]>; 
 }
 
 export class DatabaseStorage implements IStorage {
-  async getTradeLogs(): Promise<TradeLog[]> {
-    return await db.select().from(tradeLogs).orderBy(desc(tradeLogs.timestamp)).limit(50);
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async getTradeLogs(userId: string): Promise<TradeLog[]> {
+    return await db.select()
+      .from(tradeLogs)
+      .where(eq(tradeLogs.userId, userId))
+      .orderBy(desc(tradeLogs.timestamp))
+      .limit(50);
   }
 
   async createTradeLog(log: InsertTradeLog): Promise<TradeLog> {
@@ -30,13 +40,13 @@ export class DatabaseStorage implements IStorage {
     return newLog;
   }
 
-  async getBotSettings(): Promise<BotSettings | undefined> {
-    const [settings] = await db.select().from(botSettings).limit(1);
+  async getBotSettings(userId: string): Promise<BotSettings | undefined> {
+    const [settings] = await db.select().from(botSettings).where(eq(botSettings.userId, userId));
     return settings;
   }
 
-  async updateBotSettings(settings: Partial<InsertBotSettings>): Promise<BotSettings> {
-    const existing = await this.getBotSettings();
+  async updateBotSettings(userId: string, settings: Partial<InsertBotSettings>): Promise<BotSettings> {
+    const existing = await this.getBotSettings(userId);
     if (existing) {
       const [updated] = await db
         .update(botSettings)
@@ -46,6 +56,7 @@ export class DatabaseStorage implements IStorage {
       return updated;
     } else {
       const [created] = await db.insert(botSettings).values({
+        userId,
         isActive: false,
         market: "KRW-BTC",
         ...settings
@@ -54,17 +65,8 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async initializeSettings(): Promise<void> {
-    const existing = await this.getBotSettings();
-    if (!existing) {
-      await db.insert(botSettings).values({
-        isActive: false,
-        market: "KRW-BTC",
-        buyThreshold: "0.5",
-        sellThreshold: "0.5",
-        targetAmount: "10000"
-      });
-    }
+  async getAllActiveSettings(): Promise<BotSettings[]> {
+    return await db.select().from(botSettings).where(eq(botSettings.isActive, true));
   }
 }
 

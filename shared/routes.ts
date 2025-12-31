@@ -8,9 +8,32 @@ export const errorSchemas = {
   internal: z.object({
     message: z.string(),
   }),
+  unauthorized: z.object({
+    message: z.string(),
+  }),
 };
 
 export const api = {
+  auth: {
+    me: {
+      method: 'GET' as const,
+      path: '/api/auth/me',
+      responses: {
+        200: z.object({
+          id: z.number(),
+          username: z.string(),
+          displayName: z.string().optional().nullable(),
+        }).nullable(), // Returns null if not logged in
+      },
+    },
+    logout: {
+      method: 'POST' as const,
+      path: '/api/auth/logout',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+      },
+    },
+  },
   upbit: {
     status: {
       method: 'GET' as const,
@@ -23,6 +46,7 @@ export const api = {
           balanceCoin: z.number(),
           isActive: z.boolean(),
         }),
+        401: errorSchemas.unauthorized,
       },
     },
     settings: {
@@ -36,24 +60,21 @@ export const api = {
             buyThreshold: z.string(),
             sellThreshold: z.string(),
             targetAmount: z.string(),
+            hasAccessKey: z.boolean(), // Don't return the actual key
+            hasSecretKey: z.boolean(), // Don't return the actual key
           }),
+          401: errorSchemas.unauthorized,
         },
       },
       update: {
         method: 'POST' as const,
         path: '/api/upbit/settings',
-        input: insertBotSettingsSchema.partial(),
+        // Allow partial updates, including keys
+        input: insertBotSettingsSchema.partial().omit({ userId: true }),
         responses: {
           200: z.object({ success: z.boolean() }),
+          401: errorSchemas.unauthorized,
         },
-      },
-    },
-    toggle: {
-      method: 'POST' as const,
-      path: '/api/upbit/toggle',
-      input: z.object({ isActive: z.boolean() }),
-      responses: {
-        200: z.object({ success: z.boolean(), isActive: z.boolean() }),
       },
     },
   },
@@ -63,12 +84,12 @@ export const api = {
       path: '/api/logs',
       responses: {
         200: z.array(z.custom<typeof tradeLogs.$inferSelect>()),
+        401: errorSchemas.unauthorized,
       },
     },
   },
 };
 
-// Required buildUrl function
 export function buildUrl(path: string, params?: Record<string, string | number>): string {
   let url = path;
   if (params) {

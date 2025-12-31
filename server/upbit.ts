@@ -3,24 +3,19 @@ import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { IStorage } from "./storage";
+import { BotSettings } from "@shared/schema";
 
 export class UpbitService {
   private storage: IStorage;
-  private accessKey: string;
-  private secretKey: string;
   private baseUrl = "https://api.upbit.com/v1";
 
   constructor(storage: IStorage) {
     this.storage = storage;
-    this.accessKey = process.env.UPBIT_ACCESS_KEY || "";
-    this.secretKey = process.env.UPBIT_SECRET_KEY || "";
   }
 
-  private getAuthToken(query?: string) {
-    if (!this.accessKey || !this.secretKey) return null;
-
+  private getAuthToken(accessKey: string, secretKey: string, query?: string) {
     const payload: any = {
-      access_key: this.accessKey,
+      access_key: accessKey,
       nonce: uuidv4(),
     };
 
@@ -31,29 +26,27 @@ export class UpbitService {
       payload.query_hash_alg = "SHA512";
     }
 
-    return jwt.sign(payload, this.secretKey);
+    return jwt.sign(payload, secretKey);
   }
 
-  async getStatus() {
-    const settings = await this.storage.getBotSettings();
+  async getStatus(userId: string) {
+    const settings = await this.storage.getBotSettings(userId);
     const market = settings?.market || "KRW-BTC";
     
-    // Fetch Current Price (Public API)
     let currentPrice = 0;
     try {
       const tickerRes = await axios.get(`${this.baseUrl}/ticker?markets=${market}`);
       currentPrice = tickerRes.data[0].trade_price;
     } catch (e) {
-      console.error("Failed to fetch price:", e);
+      console.error(`Failed to fetch price for ${market}:`, e);
     }
 
-    // Fetch Balance (Private API) - Mock if no keys
     let balanceKRW = 0;
     let balanceCoin = 0;
 
-    if (this.accessKey && this.secretKey) {
+    if (settings?.upbitAccessKey && settings?.upbitSecretKey) {
       try {
-        const token = this.getAuthToken();
+        const token = this.getAuthToken(settings.upbitAccessKey, settings.upbitSecretKey);
         const accountsRes = await axios.get(`${this.baseUrl}/accounts`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -66,10 +59,6 @@ export class UpbitService {
       } catch (e) {
         console.error("Failed to fetch accounts:", e);
       }
-    } else {
-      // Mock balances for demonstration
-      balanceKRW = 1000000; 
-      balanceCoin = 0.05;
     }
 
     return {
@@ -83,27 +72,13 @@ export class UpbitService {
 
   startLoop() {
     setInterval(async () => {
-      const settings = await this.storage.getBotSettings();
-      if (!settings?.isActive) return;
-
-      // Simple mock strategy: 
-      // In a real bot, you would track price history or indicators here.
-      // For this MVP, we just log that we are "monitoring".
+      const activeSettings = await this.storage.getAllActiveSettings();
       
-      // Example logic placeholder:
-      // const price = await this.getCurrentPrice(settings.market);
-      // if (price < target) buy();
-      
-      // We can add a "heartbeat" log every minute just to show it's alive in the DB
-      // await this.storage.createTradeLog({
-      //   market: settings.market,
-      //   side: 'info',
-      //   price: '0',
-      //   volume: '0',
-      //   status: 'success',
-      //   message: 'Bot monitoring...'
-      // });
-
+      for (const settings of activeSettings) {
+        if (!settings.upbitAccessKey || !settings.upbitSecretKey) continue;
+        
+        // This is where the trading logic would go for each user
+      }
     }, 10000); // Run every 10 seconds
   }
 }
