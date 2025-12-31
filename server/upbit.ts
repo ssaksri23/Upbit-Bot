@@ -88,9 +88,20 @@ export class UpbitService {
       return { success: false, message: "계좌 정보를 가져올 수 없습니다" };
     } catch (e: any) {
       console.error("API key verification failed:", e.response?.data || e.message);
+      const errorName = e.response?.data?.error?.name;
+      const errorMsg = e.response?.data?.error?.message;
+      
+      if (errorName === "invalid_access_key") {
+        return { success: false, message: "Access Key가 올바르지 않습니다. 키를 다시 확인해주세요." };
+      } else if (errorName === "jwt_verification") {
+        return { success: false, message: "Secret Key가 올바르지 않습니다. 키를 다시 확인해주세요." };
+      } else if (e.response?.status === 401) {
+        return { success: false, message: "API 키 인증 실패. Access Key와 Secret Key를 다시 확인해주세요." };
+      }
+      
       return { 
         success: false, 
-        message: e.response?.data?.error?.message || "API 키가 올바르지 않습니다" 
+        message: errorMsg || "API 연결에 실패했습니다. 잠시 후 다시 시도해주세요." 
       };
     }
   }
