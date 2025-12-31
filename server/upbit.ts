@@ -56,8 +56,11 @@ export class UpbitService {
 
         balanceKRW = krwAccount ? parseFloat(krwAccount.balance) : 0;
         balanceCoin = coinAccount ? parseFloat(coinAccount.balance) : 0;
-      } catch (e) {
-        console.error("Failed to fetch accounts:", e);
+      } catch (e: any) {
+        // Suppress repeated error logging for status polling
+        if (e.response?.data?.error) {
+          console.error("Upbit API error:", e.response.data.error);
+        }
       }
     }
 
@@ -96,6 +99,8 @@ export class UpbitService {
         return { success: false, message: "Access Key가 올바르지 않습니다. 키를 다시 확인해주세요." };
       } else if (errorName === "jwt_verification") {
         return { success: false, message: "Secret Key가 올바르지 않습니다. 키를 다시 확인해주세요." };
+      } else if (errorName === "no_authorization_ip") {
+        return { success: false, message: "IP 주소가 허용되지 않습니다. Upbit에서 API 키 설정을 '모든 IP 허용'으로 변경해주세요." };
       } else if (e.response?.status === 401) {
         return { success: false, message: "API 키 인증 실패. Access Key와 Secret Key를 다시 확인해주세요." };
       }
