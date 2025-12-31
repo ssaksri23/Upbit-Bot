@@ -5,6 +5,11 @@ import { api } from "@shared/routes";
 import { UpbitService } from "./upbit";
 import { setupAuth } from "./replit_integrations/auth";
 
+// Helper to get user ID from Replit Auth claims
+function getUserId(req: any): string {
+  return req.user?.claims?.sub || "";
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -16,21 +21,21 @@ export async function registerRoutes(
   upbitService.startLoop();
 
   const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) {
+    if (!req.isAuthenticated() || !req.user?.claims?.sub) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
   };
 
   app.get(api.upbit.status.path, requireAuth, async (req, res) => {
-    // @ts-ignore
-    const status = await upbitService.getStatus(req.user!.id);
+    const userId = getUserId(req);
+    const status = await upbitService.getStatus(userId);
     res.json(status);
   });
 
   app.get(api.upbit.settings.get.path, requireAuth, async (req, res) => {
-    // @ts-ignore
-    const settings = await storage.getBotSettings(req.user!.id);
+    const userId = getUserId(req);
+    const settings = await storage.getBotSettings(userId);
     if (!settings) {
        return res.json({
          isActive: false,
@@ -54,28 +59,37 @@ export async function registerRoutes(
   });
 
   app.post(api.upbit.settings.update.path, requireAuth, async (req, res) => {
-    const updates = req.body;
-    // @ts-ignore
-    await storage.updateBotSettings(req.user!.id, updates);
-    res.json({ success: true });
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Invalid user session" });
+      }
+      const updates = req.body;
+      await storage.updateBotSettings(userId, updates);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to update settings:", err);
+      res.status(500).json({ message: "Failed to save settings" });
+    }
   });
 
   app.get(api.logs.list.path, requireAuth, async (req, res) => {
-    // @ts-ignore
-    const logs = await storage.getTradeLogs(req.user!.id);
+    const userId = getUserId(req);
+    const logs = await storage.getTradeLogs(userId);
     res.json(logs);
   });
   
   // Replit Auth User endpoint
   app.get(api.auth.me.path, (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.isAuthenticated() || !req.user) {
       return res.json(null);
     }
     const user = req.user as any;
+    const claims = user.claims || {};
     res.json({
-      id: user.id,
-      username: user.username || user.email,
-      displayName: user.displayName || user.firstName
+      id: claims.sub || "",
+      username: claims.email || claims.sub || "User",
+      displayName: claims.first_name || claims.email || "User"
     });
   });
 

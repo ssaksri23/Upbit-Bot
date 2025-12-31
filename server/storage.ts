@@ -46,6 +46,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBotSettings(userId: string, settings: Partial<InsertBotSettings>): Promise<BotSettings> {
+    if (!userId) {
+      throw new Error("User ID is required to update bot settings");
+    }
+    
     const existing = await this.getBotSettings(userId);
     if (existing) {
       const [updated] = await db

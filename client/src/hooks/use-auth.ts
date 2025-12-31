@@ -1,8 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { User } from "@shared/models/auth";
 
-async function fetchUser(): Promise<User | null> {
-  const response = await fetch("/api/auth/user", {
+interface AuthUser {
+  id: string;
+  username: string;
+  displayName?: string | null;
+}
+
+async function fetchUser(): Promise<AuthUser | null> {
+  const response = await fetch("/api/auth/me", {
     credentials: "include",
   });
 
@@ -11,10 +16,11 @@ async function fetchUser(): Promise<User | null> {
   }
 
   if (!response.ok) {
-    throw new Error(`${response.status}: ${response.statusText}`);
+    return null;
   }
 
-  return response.json();
+  const data = await response.json();
+  return data; // Returns null if not logged in
 }
 
 async function logout(): Promise<void> {
@@ -23,8 +29,8 @@ async function logout(): Promise<void> {
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { data: user, isLoading } = useQuery<User | null>({
-    queryKey: ["/api/auth/user"],
+  const { data: user, isLoading } = useQuery<AuthUser | null>({
+    queryKey: ["/api/auth/me"],
     queryFn: fetchUser,
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -33,7 +39,7 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
-      queryClient.setQueryData(["/api/auth/user"], null);
+      queryClient.setQueryData(["/api/auth/me"], null);
     },
   });
 
