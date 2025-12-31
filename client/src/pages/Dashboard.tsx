@@ -21,7 +21,9 @@ import {
   KeyRound,
   Loader2,
   TrendingUp,
-  PiggyBank
+  TrendingDown,
+  PiggyBank,
+  BarChart3
 } from "lucide-react";
 import {
   ComposedChart,
@@ -202,7 +204,7 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 animate-in">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatusCard
           title={t('dashboard.status')}
           value={settings?.isActive ? t('dashboard.active') : t('dashboard.inactive')}
@@ -228,11 +230,27 @@ export default function Dashboard() {
           testId="card-total-assets"
         />
         <StatusCard
-          title={t('dashboard.holdings')}
+          title={isKorean ? "수익률" : "Profit/Loss"}
+          value={status?.profitLoss !== undefined ? `${status.profitLoss >= 0 ? "+" : ""}${formatPrice(status.profitLoss)}` : "-"}
+          icon={status?.profitLoss !== undefined && status.profitLoss >= 0 ? TrendingUp : TrendingDown}
+          trend={status?.profitLoss !== undefined ? (status.profitLoss >= 0 ? "up" : "down") : "neutral"}
+          description={status?.profitLossPercent !== undefined ? `${status.profitLossPercent >= 0 ? "+" : ""}${status.profitLossPercent.toFixed(2)}%` : "0%"}
+          className={status?.profitLoss !== undefined ? (status.profitLoss >= 0 ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5") : ""}
+          testId="card-profit-loss"
+        />
+        <StatusCard
+          title={isKorean ? "보유량" : "Holdings"}
           value={status?.balanceCoin ? Number(status.balanceCoin).toFixed(8) : "0"}
           icon={Coins}
           description={coinSymbol}
           testId="card-coin-holdings"
+        />
+        <StatusCard
+          title={isKorean ? "거래 횟수" : "Trades"}
+          value={status?.tradeCount?.toString() || "0"}
+          icon={BarChart3}
+          description={isKorean ? "성공한 거래" : "Successful"}
+          testId="card-trade-count"
         />
       </div>
 

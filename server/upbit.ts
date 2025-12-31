@@ -244,6 +244,45 @@ export class UpbitService {
 
     const totalAssetKRW = balanceKRW + (balanceCoin * currentPrice);
 
+    // Calculate profit/loss from trade logs
+    const logs = await this.storage.getTradeLogs(userId);
+    let totalInvested = 0; // Total KRW spent on buys
+    let totalReturned = 0; // Total KRW received from sells
+    let todayProfitLoss = 0;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const log of logs) {
+      if (log.status !== 'success') continue;
+      
+      const price = parseFloat(String(log.price));
+      const volume = parseFloat(String(log.volume));
+      const value = price * volume;
+      
+      if (log.side === 'bid') {
+        totalInvested += value;
+      } else if (log.side === 'ask') {
+        totalReturned += value;
+      }
+
+      // Today's P/L
+      if (log.timestamp && new Date(log.timestamp) >= today) {
+        if (log.side === 'ask') {
+          todayProfitLoss += value;
+        } else if (log.side === 'bid') {
+          todayProfitLoss -= value;
+        }
+      }
+    }
+
+    // Current holdings value (unrealized)
+    const currentHoldingsValue = balanceCoin * currentPrice;
+    
+    // Total realized + unrealized profit/loss
+    const profitLoss = (totalReturned + currentHoldingsValue) - totalInvested;
+    const profitLossPercent = totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
+
     return {
       market,
       currentPrice,
@@ -251,6 +290,12 @@ export class UpbitService {
       balanceCoin,
       totalAssetKRW,
       isActive: settings?.isActive || false,
+      totalInvested,
+      totalReturned,
+      profitLoss,
+      profitLossPercent,
+      todayProfitLoss,
+      tradeCount: logs.filter(l => l.status === 'success').length,
     };
   }
 

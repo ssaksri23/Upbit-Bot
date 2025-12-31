@@ -82,6 +82,13 @@ export const api = {
           balanceCoin: z.number(),
           totalAssetKRW: z.number(),
           isActive: z.boolean(),
+          // Profit/Loss stats
+          totalInvested: z.number(),
+          totalReturned: z.number(),
+          profitLoss: z.number(),
+          profitLossPercent: z.number(),
+          todayProfitLoss: z.number(),
+          tradeCount: z.number(),
         }),
         401: errorSchemas.unauthorized,
       },
