@@ -43,13 +43,7 @@ const STRATEGIES = [
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
-  const { data: status } = useUpbitStatus();
   const { data: settings } = useBotSettings();
-  const { data: logs } = useTradeLogs();
-  const { data: markets, isLoading: marketsLoading } = useMarkets();
-  const updateSettings = useUpdateSettings();
-  const verifyKeys = useVerifyApiKeys();
-
   const [formState, setFormState] = useState({
     market: "KRW-BTC",
     strategy: "percent",
@@ -59,6 +53,11 @@ export default function Dashboard() {
     upbitAccessKey: "",
     upbitSecretKey: "",
   });
+  const { data: status } = useUpbitStatus(formState.market);
+  const { data: logs } = useTradeLogs();
+  const { data: markets, isLoading: marketsLoading } = useMarkets();
+  const updateSettings = useUpdateSettings();
+  const verifyKeys = useVerifyApiKeys();
 
   useEffect(() => {
     if (settings) {

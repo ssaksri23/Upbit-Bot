@@ -46,9 +46,9 @@ export class UpbitService {
     }
   }
 
-  async getStatus(userId: string) {
+  async getStatus(userId: string, marketOverride?: string) {
     const settings = await this.storage.getBotSettings(userId);
-    const market = settings?.market || "KRW-BTC";
+    const market = marketOverride || settings?.market || "KRW-BTC";
     
     let currentPrice = 0;
     try {

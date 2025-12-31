@@ -16,11 +16,14 @@ export function useMarkets() {
   });
 }
 
-export function useUpbitStatus() {
+export function useUpbitStatus(market?: string) {
   return useQuery({
-    queryKey: [api.upbit.status.path],
+    queryKey: [api.upbit.status.path, market],
     queryFn: async () => {
-      const res = await fetch(api.upbit.status.path, { credentials: "include" });
+      const url = market 
+        ? `${api.upbit.status.path}?market=${encodeURIComponent(market)}`
+        : api.upbit.status.path;
+      const res = await fetch(url, { credentials: "include" });
       if (res.status === 401) return null;
       if (!res.ok) throw new Error("Failed to fetch status");
       return api.upbit.status.responses[200].parse(await res.json());

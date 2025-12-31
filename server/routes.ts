@@ -129,7 +129,8 @@ export async function registerRoutes(
 
   app.get(api.upbit.status.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
-    const status = await upbitService.getStatus(userId);
+    const marketOverride = req.query.market as string | undefined;
+    const status = await upbitService.getStatus(userId, marketOverride);
     res.json(status);
   });
 
