@@ -133,11 +133,29 @@ export default function Dashboard() {
     });
   };
 
+  // Calculate RSI
+  const calculateRSI = (prices: number[], period: number = 14): number => {
+    if (prices.length < period + 1) return 50;
+    let gains = 0;
+    let losses = 0;
+    for (let i = prices.length - period; i < prices.length; i++) {
+      const change = prices[i] - prices[i - 1];
+      if (change > 0) gains += change;
+      else losses += Math.abs(change);
+    }
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  };
+
   // Prepare chart data with indicators
   const chartData = candles?.map((candle, i, arr) => {
     const prices = arr.slice(0, i + 1).map(c => c.close);
     const sma5 = prices.length >= 5 ? prices.slice(-5).reduce((a, b) => a + b, 0) / 5 : candle.close;
     const sma20 = prices.length >= 20 ? prices.slice(-20).reduce((a, b) => a + b, 0) / 20 : candle.close;
+    const rsi = calculateRSI(prices);
     
     let bb = { upper: candle.close, middle: candle.close, lower: candle.close };
     if (prices.length >= 20) {
@@ -158,16 +176,21 @@ export default function Dashboard() {
       volume: candle.volume || 0,
       sma5,
       sma20,
+      rsi,
       bbUpper: bb.upper,
       bbMiddle: bb.middle,
       bbLower: bb.lower,
       isUp: candle.close >= candle.open,
+      candleBody: [candle.open, candle.close],
+      candleWick: [candle.low, candle.high],
     };
   }) || [];
 
   const priceChange = chartData.length >= 2 
     ? ((chartData[chartData.length - 1]?.close || 0) - (chartData[0]?.close || 0)) / (chartData[0]?.close || 1) * 100 
     : 0;
+
+  const currentRSI = chartData.length > 0 ? chartData[chartData.length - 1]?.rsi || 50 : 50;
 
   const formatPrice = (price: number | string) => {
     return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(Number(price));
@@ -669,7 +692,45 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               
-              <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
+              <div className="h-[80px] mt-2 border-t border-border pt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">RSI (14)</span>
+                  <span className={cn(
+                    "text-xs font-bold",
+                    currentRSI > 70 ? "text-red-500" : currentRSI < 30 ? "text-green-500" : "text-muted-foreground"
+                  )}>
+                    {currentRSI.toFixed(1)}
+                    {currentRSI > 70 && (isKorean ? " 과매수" : " Overbought")}
+                    {currentRSI < 30 && (isKorean ? " 과매도" : " Oversold")}
+                  </span>
+                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      ticks={[30, 50, 70]}
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={9}
+                      tickLine={false}
+                      axisLine={false}
+                      width={30}
+                    />
+                    <ReferenceLine y={70} stroke="hsl(0 84% 60% / 0.5)" strokeDasharray="3 3" />
+                    <ReferenceLine y={30} stroke="hsl(142 76% 36% / 0.5)" strokeDasharray="3 3" />
+                    <Area
+                      type="monotone"
+                      dataKey="rsi"
+                      stroke="hsl(280 100% 70%)"
+                      fill="hsl(280 100% 70% / 0.2)"
+                      strokeWidth={1.5}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              
+              <div className="grid grid-cols-5 gap-2 mt-4 text-xs">
                 <div className="bg-muted/50 rounded-md p-2 text-center">
                   <div className="text-muted-foreground">{isKorean ? "시가" : "Open"}</div>
                   <div className="font-mono font-medium">{chartData[chartData.length - 1]?.open?.toLocaleString() || "-"}</div>
@@ -685,6 +746,13 @@ export default function Dashboard() {
                 <div className="bg-muted/50 rounded-md p-2 text-center">
                   <div className="text-muted-foreground">{isKorean ? "종가" : "Close"}</div>
                   <div className="font-mono font-medium">{chartData[chartData.length - 1]?.close?.toLocaleString() || "-"}</div>
+                </div>
+                <div className="bg-muted/50 rounded-md p-2 text-center">
+                  <div className="text-muted-foreground">RSI</div>
+                  <div className={cn(
+                    "font-mono font-medium",
+                    currentRSI > 70 ? "text-red-500" : currentRSI < 30 ? "text-green-500" : ""
+                  )}>{currentRSI.toFixed(1)}</div>
                 </div>
               </div>
             </CardContent>
