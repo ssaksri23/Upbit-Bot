@@ -15,15 +15,40 @@ export const errorSchemas = {
 
 export const api = {
   auth: {
+    register: {
+      method: 'POST' as const,
+      path: '/api/auth/register',
+      input: z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+        displayName: z.string().optional(),
+      }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        400: errorSchemas.validation,
+      },
+    },
+    login: {
+      method: 'POST' as const,
+      path: '/api/auth/login',
+      input: z.object({
+        email: z.string().email(),
+        password: z.string(),
+      }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        401: errorSchemas.unauthorized,
+      },
+    },
     me: {
       method: 'GET' as const,
       path: '/api/auth/me',
       responses: {
         200: z.object({
-          id: z.number(),
-          username: z.string(),
+          id: z.string(),
+          email: z.string(),
           displayName: z.string().optional().nullable(),
-        }).nullable(), // Returns null if not logged in
+        }).nullable(),
       },
     },
     logout: {

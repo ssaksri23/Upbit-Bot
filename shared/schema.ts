@@ -3,15 +3,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 
-// --- Replit Auth Users (Matches shared/models/auth.ts structure) ---
+// --- Users ---
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  username: text("username").unique(),
+  email: varchar("email").unique().notNull(),
+  password: text("password").notNull(),
   displayName: text("display_name"),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

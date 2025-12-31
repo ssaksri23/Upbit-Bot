@@ -8,8 +8,10 @@ import {
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  // Users (Managed by Replit Auth mostly, but exposed here)
-  getUserByUsername(username: string): Promise<User | undefined>;
+  // Users
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  createUser(email: string, hashedPassword: string, displayName?: string): Promise<User>;
   
   // Logs
   getTradeLogs(userId: string): Promise<TradeLog[]>;
@@ -22,8 +24,22 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async createUser(email: string, hashedPassword: string, displayName?: string): Promise<User> {
+    const [user] = await db.insert(users).values({
+      email,
+      password: hashedPassword,
+      displayName: displayName || email.split('@')[0],
+    }).returning();
     return user;
   }
 
