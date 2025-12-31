@@ -168,6 +168,18 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.upbit.settings.verify.path, requireAuth, async (req, res) => {
+    const userId = getUserId(req);
+    const settings = await storage.getBotSettings(userId);
+    
+    if (!settings?.upbitAccessKey || !settings?.upbitSecretKey) {
+      return res.json({ success: false, message: "API 키가 설정되지 않았습니다" });
+    }
+    
+    const result = await upbitService.verifyApiKeys(settings.upbitAccessKey, settings.upbitSecretKey);
+    res.json(result);
+  });
+
   app.get(api.logs.list.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
     const logs = await storage.getTradeLogs(userId);

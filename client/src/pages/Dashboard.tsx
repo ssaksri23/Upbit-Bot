@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,9 @@ import {
   Settings2, 
   Save,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  KeyRound,
+  Loader2
 } from "lucide-react";
 import {
   LineChart,
@@ -36,6 +38,7 @@ export default function Dashboard() {
   const { data: settings } = useBotSettings();
   const { data: logs } = useTradeLogs();
   const updateSettings = useUpdateSettings();
+  const verifyKeys = useVerifyApiKeys();
 
   const [formState, setFormState] = useState({
     market: "KRW-BTC",
@@ -207,14 +210,28 @@ export default function Dashboard() {
               />
             </div>
 
-            <Button onClick={handleSave} className="w-full mt-4" disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? t('dashboard.saving') : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {t('dashboard.save')}
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2 mt-4">
+              <Button onClick={handleSave} className="flex-1" disabled={updateSettings.isPending}>
+                {updateSettings.isPending ? t('dashboard.saving') : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    {t('dashboard.save')}
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => verifyKeys.mutate()} 
+                disabled={verifyKeys.isPending || !settings?.hasAccessKey}
+                data-testid="button-verify-keys"
+              >
+                {verifyKeys.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <KeyRound className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

@@ -70,6 +70,31 @@ export class UpbitService {
     };
   }
 
+  async verifyApiKeys(accessKey: string, secretKey: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const token = this.getAuthToken(accessKey, secretKey);
+      const accountsRes = await axios.get(`${this.baseUrl}/accounts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (accountsRes.data && Array.isArray(accountsRes.data)) {
+        const krwAccount = accountsRes.data.find((a: any) => a.currency === "KRW");
+        const balance = krwAccount ? parseFloat(krwAccount.balance) : 0;
+        return { 
+          success: true, 
+          message: `API 키 확인 완료! KRW 잔고: ${balance.toLocaleString()}원` 
+        };
+      }
+      return { success: false, message: "계좌 정보를 가져올 수 없습니다" };
+    } catch (e: any) {
+      console.error("API key verification failed:", e.response?.data || e.message);
+      return { 
+        success: false, 
+        message: e.response?.data?.error?.message || "API 키가 올바르지 않습니다" 
+      };
+    }
+  }
+
   startLoop() {
     setInterval(async () => {
       const activeSettings = await this.storage.getAllActiveSettings();

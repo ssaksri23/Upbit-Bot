@@ -67,6 +67,10 @@ const resources = {
         savedDesc: "Your bot configuration has been updated.",
         error: "Error",
         errorDesc: "Failed to save settings. Please try again.",
+        verifySuccess: "API Key Verified",
+        verifyFailed: "Verification Failed",
+        verify: "Verify Keys",
+        verifying: "Verifying...",
       },
       columns: {
         time: "Time",
@@ -147,6 +151,10 @@ const resources = {
         savedDesc: "봇 설정이 저장되었습니다.",
         error: "오류",
         errorDesc: "설정 저장에 실패했습니다. 다시 시도해주세요.",
+        verifySuccess: "API 키 확인 완료",
+        verifyFailed: "API 키 확인 실패",
+        verify: "키 확인",
+        verifying: "확인 중...",
       },
       columns: {
         time: "시간",

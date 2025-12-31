@@ -94,10 +94,17 @@ export const api = {
       update: {
         method: 'POST' as const,
         path: '/api/upbit/settings',
-        // Allow partial updates, including keys
         input: insertBotSettingsSchema.partial().omit({ userId: true }),
         responses: {
           200: z.object({ success: z.boolean() }),
+          401: errorSchemas.unauthorized,
+        },
+      },
+      verify: {
+        method: 'POST' as const,
+        path: '/api/upbit/verify',
+        responses: {
+          200: z.object({ success: z.boolean(), message: z.string() }),
           401: errorSchemas.unauthorized,
         },
       },

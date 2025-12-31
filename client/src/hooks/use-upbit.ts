@@ -63,6 +63,36 @@ export function useUpdateSettings() {
   });
 }
 
+export function useVerifyApiKeys() {
+  const { toast } = useToast();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/upbit/verify", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to verify");
+      return res.json() as Promise<{ success: boolean; message: string }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: data.success ? t("settings.verifySuccess") : t("settings.verifyFailed"),
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: () => {
+      toast({
+        title: t("settings.error"),
+        description: t("settings.errorDesc"),
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useTradeLogs() {
   return useQuery({
     queryKey: [api.logs.list.path],
