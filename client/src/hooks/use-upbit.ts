@@ -4,6 +4,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { InsertBotSettings } from "@shared/schema";
 
+export function useMarkets() {
+  return useQuery({
+    queryKey: [api.upbit.markets.path],
+    queryFn: async () => {
+      const res = await fetch(api.upbit.markets.path);
+      if (!res.ok) throw new Error("Failed to fetch markets");
+      return api.upbit.markets.responses[200].parse(await res.json());
+    },
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+}
+
 export function useUpbitStatus() {
   return useQuery({
     queryKey: [api.upbit.status.path],

@@ -122,6 +122,11 @@ export async function registerRoutes(
     });
   });
 
+  app.get(api.upbit.markets.path, async (req, res) => {
+    const markets = await upbitService.getMarkets();
+    res.json(markets);
+  });
+
   app.get(api.upbit.status.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
     const status = await upbitService.getStatus(userId);
@@ -135,6 +140,7 @@ export async function registerRoutes(
        return res.json({
          isActive: false,
          market: "KRW-BTC",
+         strategy: "percent",
          buyThreshold: "0.5",
          sellThreshold: "0.5",
          targetAmount: "10000",
@@ -145,6 +151,7 @@ export async function registerRoutes(
     res.json({
       isActive: settings.isActive,
       market: settings.market,
+      strategy: settings.strategy || "percent",
       buyThreshold: settings.buyThreshold,
       sellThreshold: settings.sellThreshold,
       targetAmount: settings.targetAmount,
@@ -160,6 +167,13 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid user session" });
       }
       const updates = req.body;
+      
+      // Validate strategy if provided
+      const validStrategies = ["percent", "grid", "dca"];
+      if (updates.strategy && !validStrategies.includes(updates.strategy)) {
+        return res.status(400).json({ message: "Invalid strategy value" });
+      }
+      
       await storage.updateBotSettings(userId, updates);
       res.json({ success: true });
     } catch (err) {

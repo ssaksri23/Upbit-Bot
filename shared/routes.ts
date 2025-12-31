@@ -60,6 +60,17 @@ export const api = {
     },
   },
   upbit: {
+    markets: {
+      method: 'GET' as const,
+      path: '/api/upbit/markets',
+      responses: {
+        200: z.array(z.object({
+          market: z.string(),
+          korean_name: z.string(),
+          english_name: z.string(),
+        })),
+      },
+    },
     status: {
       method: 'GET' as const,
       path: '/api/upbit/status',
@@ -69,6 +80,7 @@ export const api = {
           currentPrice: z.number(),
           balanceKRW: z.number(),
           balanceCoin: z.number(),
+          totalAssetKRW: z.number(),
           isActive: z.boolean(),
         }),
         401: errorSchemas.unauthorized,
@@ -82,11 +94,12 @@ export const api = {
           200: z.object({
             isActive: z.boolean(),
             market: z.string(),
+            strategy: z.string(),
             buyThreshold: z.string(),
             sellThreshold: z.string(),
             targetAmount: z.string(),
-            hasAccessKey: z.boolean(), // Don't return the actual key
-            hasSecretKey: z.boolean(), // Don't return the actual key
+            hasAccessKey: z.boolean(),
+            hasSecretKey: z.boolean(),
           }),
           401: errorSchemas.unauthorized,
         },

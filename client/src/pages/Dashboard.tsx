@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { 
   Activity, 
@@ -18,7 +19,9 @@ import {
   CheckCircle2,
   AlertCircle,
   KeyRound,
-  Loader2
+  Loader2,
+  TrendingUp,
+  PiggyBank
 } from "lucide-react";
 import {
   LineChart,
@@ -32,16 +35,24 @@ import {
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 
+const STRATEGIES = [
+  { value: "percent", label: "변동률 매매", labelEn: "Percent Trading", desc: "일정 비율 변동 시 매수/매도" },
+  { value: "grid", label: "그리드 매매", labelEn: "Grid Trading", desc: "가격 구간별 분할 매매" },
+  { value: "dca", label: "DCA 적립식", labelEn: "DCA", desc: "정기적 분할 매수" },
+];
+
 export default function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: status } = useUpbitStatus();
   const { data: settings } = useBotSettings();
   const { data: logs } = useTradeLogs();
+  const { data: markets, isLoading: marketsLoading } = useMarkets();
   const updateSettings = useUpdateSettings();
   const verifyKeys = useVerifyApiKeys();
 
   const [formState, setFormState] = useState({
     market: "KRW-BTC",
+    strategy: "percent",
     buyThreshold: "0.5",
     sellThreshold: "0.5",
     targetAmount: "10000",
@@ -49,12 +60,12 @@ export default function Dashboard() {
     upbitSecretKey: "",
   });
 
-  // Sync form with settings when loaded
   useEffect(() => {
     if (settings) {
       setFormState(prev => ({
         ...prev,
         market: settings.market,
+        strategy: settings.strategy || "percent",
         buyThreshold: settings.buyThreshold || "0.5",
         sellThreshold: settings.sellThreshold || "0.5",
         targetAmount: settings.targetAmount || "10000",
@@ -65,7 +76,6 @@ export default function Dashboard() {
   const handleSave = () => {
     updateSettings.mutate({
       ...formState,
-      // Only send keys if they have length > 0
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
     });
@@ -75,7 +85,6 @@ export default function Dashboard() {
     updateSettings.mutate({ isActive: !settings?.isActive });
   };
 
-  // Mock data for chart - in a real app, this would come from historical API
   const chartData = Array.from({ length: 20 }).map((_, i) => ({
     time: i,
     price: status?.currentPrice ? status.currentPrice * (1 + (Math.random() * 0.02 - 0.01)) : 0
@@ -85,10 +94,13 @@ export default function Dashboard() {
     return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(Number(price));
   };
 
+  const selectedMarket = markets?.find(m => m.market === formState.market);
+  const coinSymbol = formState.market.split('-')[1] || "BTC";
+  const isKorean = i18n.language === 'ko';
+
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 animate-in">
-      {/* Top Status Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatusCard
           title={t('dashboard.status')}
           value={settings?.isActive ? t('dashboard.active') : t('dashboard.inactive')}
@@ -97,10 +109,11 @@ export default function Dashboard() {
           className={settings?.isActive ? "border-primary/50 bg-primary/5" : ""}
         />
         <StatusCard
-          title={t('dashboard.currentPrice')}
+          title={isKorean ? (selectedMarket?.korean_name || coinSymbol) : (selectedMarket?.english_name || coinSymbol)}
           value={status?.currentPrice ? formatPrice(status.currentPrice) : "-"}
           icon={Activity}
           trend="up"
+          description={formState.market}
         />
         <StatusCard
           title={t('dashboard.balance')}
@@ -112,12 +125,18 @@ export default function Dashboard() {
           title={t('dashboard.holdings')}
           value={status?.balanceCoin ? Number(status.balanceCoin).toFixed(8) : "0"}
           icon={Coins}
-          description={settings?.market?.split('-')[1] || "BTC"}
+          description={coinSymbol}
+        />
+        <StatusCard
+          title={t('dashboard.totalAsset')}
+          value={status?.totalAssetKRW ? formatPrice(status.totalAssetKRW) : "0"}
+          icon={PiggyBank}
+          description="KRW"
+          trend="up"
         />
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Settings Panel */}
         <Card className="lg:col-span-1 border-primary/20">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -134,42 +153,87 @@ export default function Dashboard() {
                   {settings?.isActive ? t('dashboard.monitoring') : t('dashboard.inactive')}
                 </div>
               </div>
-              <Switch checked={settings?.isActive} onCheckedChange={toggleActive} />
+              <Switch checked={settings?.isActive} onCheckedChange={toggleActive} data-testid="switch-bot-active" />
             </div>
 
             <div className="space-y-2">
               <Label>{t('dashboard.market')}</Label>
-              <Input 
+              <Select 
                 value={formState.market} 
-                onChange={e => setFormState({...formState, market: e.target.value})}
-                placeholder="KRW-BTC" 
-              />
+                onValueChange={(value) => setFormState({...formState, market: value})}
+              >
+                <SelectTrigger data-testid="select-market">
+                  <SelectValue placeholder="Select market" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {marketsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                  ) : (
+                    markets?.map((m) => (
+                      <SelectItem key={m.market} value={m.market} data-testid={`market-option-${m.market}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
+                          <span>{isKorean ? m.korean_name : m.english_name}</span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t('dashboard.buyThreshold')}</Label>
-                <div className="relative">
-                  <Input 
-                    type="number"
-                    value={formState.buyThreshold}
-                    onChange={e => setFormState({...formState, buyThreshold: e.target.value})}
-                  />
-                  <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>{t('dashboard.sellThreshold')}</Label>
-                <div className="relative">
-                  <Input 
-                    type="number"
-                    value={formState.sellThreshold}
-                    onChange={e => setFormState({...formState, sellThreshold: e.target.value})}
-                  />
-                  <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label>{t('dashboard.strategy')}</Label>
+              <Select 
+                value={formState.strategy} 
+                onValueChange={(value) => setFormState({...formState, strategy: value})}
+              >
+                <SelectTrigger data-testid="select-strategy">
+                  <SelectValue placeholder="Select strategy" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STRATEGIES.map((s) => (
+                    <SelectItem key={s.value} value={s.value} data-testid={`strategy-option-${s.value}`}>
+                      <div className="flex flex-col">
+                        <span>{isKorean ? s.label : s.labelEn}</span>
+                        <span className="text-xs text-muted-foreground">{s.desc}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {formState.strategy === "percent" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{t('dashboard.buyThreshold')}</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number"
+                      value={formState.buyThreshold}
+                      onChange={e => setFormState({...formState, buyThreshold: e.target.value})}
+                      data-testid="input-buy-threshold"
+                    />
+                    <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('dashboard.sellThreshold')}</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number"
+                      value={formState.sellThreshold}
+                      onChange={e => setFormState({...formState, sellThreshold: e.target.value})}
+                      data-testid="input-sell-threshold"
+                    />
+                    <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>{t('dashboard.targetAmount')}</Label>
@@ -178,6 +242,7 @@ export default function Dashboard() {
                   type="number"
                   value={formState.targetAmount}
                   onChange={e => setFormState({...formState, targetAmount: e.target.value})}
+                  data-testid="input-target-amount"
                 />
                 <span className="absolute right-3 top-2 text-sm text-muted-foreground">KRW</span>
               </div>
@@ -201,17 +266,19 @@ export default function Dashboard() {
                 placeholder={t('dashboard.accessKey')} 
                 value={formState.upbitAccessKey}
                 onChange={e => setFormState({...formState, upbitAccessKey: e.target.value})}
+                data-testid="input-access-key"
               />
               <Input 
                 type="password" 
                 placeholder={t('dashboard.secretKey')} 
                 value={formState.upbitSecretKey}
                 onChange={e => setFormState({...formState, upbitSecretKey: e.target.value})}
+                data-testid="input-secret-key"
               />
             </div>
 
             <div className="flex gap-2 mt-4">
-              <Button onClick={handleSave} className="flex-1" disabled={updateSettings.isPending}>
+              <Button onClick={handleSave} className="flex-1" disabled={updateSettings.isPending} data-testid="button-save-settings">
                 {updateSettings.isPending ? t('dashboard.saving') : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
@@ -235,11 +302,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Chart Section */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="h-[400px] flex flex-col">
             <CardHeader>
-              <CardTitle>{settings?.market || "KRW-BTC"} Price Action</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                {isKorean ? selectedMarket?.korean_name : selectedMarket?.english_name} ({formState.market})
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 pb-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -268,7 +337,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Trade Logs Table */}
           <Card>
             <CardHeader>
               <CardTitle>{t('dashboard.recentTrades')}</CardTitle>

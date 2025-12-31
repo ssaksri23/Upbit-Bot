@@ -32,6 +32,7 @@ export const botSettings = pgTable("bot_settings", {
   userId: varchar("user_id").references(() => users.id).notNull().unique(), // One settings per user (String ID)
   isActive: boolean("is_active").default(false).notNull(),
   market: text("market").default("KRW-BTC").notNull(),
+  strategy: text("strategy").default("percent").notNull(), // percent, grid, dca
   buyThreshold: numeric("buy_threshold").default("0.5"),
   sellThreshold: numeric("sell_threshold").default("0.5"),
   targetAmount: numeric("target_amount").default("10000"),

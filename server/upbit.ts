@@ -29,6 +29,23 @@ export class UpbitService {
     return jwt.sign(payload, secretKey, { algorithm: 'HS256' });
   }
 
+  async getMarkets(): Promise<{ market: string; korean_name: string; english_name: string }[]> {
+    try {
+      const res = await axios.get(`${this.baseUrl}/market/all?isDetails=false`);
+      // Filter only KRW markets
+      return res.data
+        .filter((m: any) => m.market.startsWith("KRW-"))
+        .map((m: any) => ({
+          market: m.market,
+          korean_name: m.korean_name,
+          english_name: m.english_name,
+        }));
+    } catch (e) {
+      console.error("Failed to fetch markets:", e);
+      return [];
+    }
+  }
+
   async getStatus(userId: string) {
     const settings = await this.storage.getBotSettings(userId);
     const market = settings?.market || "KRW-BTC";
@@ -64,11 +81,14 @@ export class UpbitService {
       }
     }
 
+    const totalAssetKRW = balanceKRW + (balanceCoin * currentPrice);
+
     return {
       market,
       currentPrice,
       balanceKRW,
       balanceCoin,
+      totalAssetKRW,
       isActive: settings?.isActive || false,
     };
   }

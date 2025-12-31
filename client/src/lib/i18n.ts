@@ -33,6 +33,8 @@ const resources = {
         noTrades: "No trades recorded yet.",
         welcome: "Automate your crypto trading strategy.",
         subtitle: "Simple. Secure. Automated.",
+        totalAsset: "Total Assets",
+        strategy: "Strategy",
       },
       auth: {
         login: "Login",
@@ -117,6 +119,8 @@ const resources = {
         noTrades: "아직 거래 기록이 없습니다.",
         welcome: "가상화폐 자동매매를 시작하세요.",
         subtitle: "간편하고 안전한 자동화 시스템",
+        totalAsset: "총 자산",
+        strategy: "전략",
       },
       auth: {
         login: "로그인",
