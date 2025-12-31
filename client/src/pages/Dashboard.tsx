@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,9 @@ export default function Dashboard() {
   const { data: markets, isLoading: marketsLoading } = useMarkets();
   const updateSettings = useUpdateSettings();
   const verifyKeys = useVerifyApiKeys();
+  const manualBuy = useManualBuy();
+  const manualSell = useManualSell();
+  const [buyAmount, setBuyAmount] = useState("10000");
 
   useEffect(() => {
     if (settings) {
@@ -144,6 +147,55 @@ export default function Dashboard() {
           testId="card-coin-holdings"
         />
       </div>
+
+      <Card className="border-primary/20">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            <CardTitle>{isKorean ? "수동 거래" : "Manual Trade"}</CardTitle>
+          </div>
+          <CardDescription>{isKorean ? "테스트용 수동 매수/매도" : "Manual buy/sell for testing"}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label className="whitespace-nowrap">{isKorean ? "매수 금액" : "Buy Amount"}</Label>
+              <Input
+                type="number"
+                value={buyAmount}
+                onChange={(e) => setBuyAmount(e.target.value)}
+                className="w-32"
+                min="5000"
+                step="1000"
+                data-testid="input-buy-amount"
+              />
+              <span className="text-muted-foreground text-sm">KRW</span>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => manualBuy.mutate({ market: formState.market, amount: Number(buyAmount) })}
+                disabled={manualBuy.isPending || Number(buyAmount) < 5000}
+                data-testid="button-manual-buy"
+              >
+                {manualBuy.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isKorean ? "매수" : "Buy"}
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={() => manualSell.mutate({ market: formState.market })}
+                disabled={manualSell.isPending || !status?.balanceCoin || status.balanceCoin === 0}
+                data-testid="button-manual-sell"
+              >
+                {manualSell.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isKorean ? "전량 매도" : "Sell All"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isKorean ? "최소 주문 금액: 5,000원" : "Min order: 5,000 KRW"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-8 lg:grid-cols-3">
         <Card className="lg:col-span-1 border-primary/20">

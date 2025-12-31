@@ -122,6 +122,31 @@ export const api = {
         },
       },
     },
+    trade: {
+      buy: {
+        method: 'POST' as const,
+        path: '/api/upbit/buy',
+        input: z.object({
+          market: z.string(),
+          amount: z.number(),
+        }),
+        responses: {
+          200: z.object({ success: z.boolean(), message: z.string() }),
+          401: errorSchemas.unauthorized,
+        },
+      },
+      sell: {
+        method: 'POST' as const,
+        path: '/api/upbit/sell',
+        input: z.object({
+          market: z.string(),
+        }),
+        responses: {
+          200: z.object({ success: z.boolean(), message: z.string() }),
+          401: errorSchemas.unauthorized,
+        },
+      },
+    },
   },
   logs: {
     list: {

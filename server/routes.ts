@@ -218,6 +218,89 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  // Manual Buy
+  app.post(api.upbit.trade.buy.path, requireAuth, async (req, res) => {
+    const userId = getUserId(req);
+    const settings = await storage.getBotSettings(userId);
+    
+    if (!settings?.upbitAccessKey || !settings?.upbitSecretKey) {
+      return res.json({ success: false, message: "API 키가 설정되지 않았습니다" });
+    }
+
+    const { market, amount } = req.body;
+    if (!market || !amount || amount < 5000) {
+      return res.json({ success: false, message: "최소 주문 금액은 5,000원입니다" });
+    }
+
+    const currentPrice = await upbitService.getCurrentPrice(market);
+    const result = await upbitService.placeBuyOrder(
+      settings.upbitAccessKey,
+      settings.upbitSecretKey,
+      market,
+      amount
+    );
+
+    await storage.createTradeLog({
+      userId,
+      market,
+      side: "bid",
+      price: String(currentPrice),
+      volume: String(amount / currentPrice),
+      status: result.success ? "success" : "failed",
+      message: result.success ? `수동 매수: ${amount.toLocaleString()}원` : result.message,
+    });
+
+    res.json({ 
+      success: result.success, 
+      message: result.success ? `${amount.toLocaleString()}원 매수 완료` : (result.message || "매수 실패") 
+    });
+  });
+
+  // Manual Sell (sell all)
+  app.post(api.upbit.trade.sell.path, requireAuth, async (req, res) => {
+    const userId = getUserId(req);
+    const settings = await storage.getBotSettings(userId);
+    
+    if (!settings?.upbitAccessKey || !settings?.upbitSecretKey) {
+      return res.json({ success: false, message: "API 키가 설정되지 않았습니다" });
+    }
+
+    const { market } = req.body;
+    if (!market) {
+      return res.json({ success: false, message: "마켓을 선택하세요" });
+    }
+
+    const coinSymbol = market.split("-")[1];
+    const coinBalance = await upbitService.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
+    const currentPrice = await upbitService.getCurrentPrice(market);
+
+    if (coinBalance * currentPrice < 5000) {
+      return res.json({ success: false, message: "매도 가능한 수량이 부족합니다 (최소 5,000원)" });
+    }
+
+    const result = await upbitService.placeSellOrder(
+      settings.upbitAccessKey,
+      settings.upbitSecretKey,
+      market,
+      coinBalance
+    );
+
+    await storage.createTradeLog({
+      userId,
+      market,
+      side: "ask",
+      price: String(currentPrice),
+      volume: String(coinBalance),
+      status: result.success ? "success" : "failed",
+      message: result.success ? `수동 매도: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+    });
+
+    res.json({ 
+      success: result.success, 
+      message: result.success ? `${coinBalance.toFixed(8)} ${coinSymbol} 매도 완료` : (result.message || "매도 실패") 
+    });
+  });
+
   app.get(api.logs.list.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
     const logs = await storage.getTradeLogs(userId);

@@ -120,3 +120,71 @@ export function useTradeLogs() {
     refetchInterval: 5000,
   });
 }
+
+export function useManualBuy() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ market, amount }: { market: string; amount: number }) => {
+      const res = await fetch(api.upbit.trade.buy.path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ market, amount }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to buy");
+      return res.json() as Promise<{ success: boolean; message: string }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.upbit.status.path] });
+      queryClient.invalidateQueries({ queryKey: [api.logs.list.path] });
+      toast({
+        title: data.success ? "매수 완료" : "매수 실패",
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "오류",
+        description: "매수 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useManualSell() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ market }: { market: string }) => {
+      const res = await fetch(api.upbit.trade.sell.path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ market }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to sell");
+      return res.json() as Promise<{ success: boolean; message: string }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.upbit.status.path] });
+      queryClient.invalidateQueries({ queryKey: [api.logs.list.path] });
+      toast({
+        title: data.success ? "매도 완료" : "매도 실패",
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "오류",
+        description: "매도 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    },
+  });
+}
