@@ -127,6 +127,13 @@ export async function registerRoutes(
     res.json(markets);
   });
 
+  app.get(api.upbit.candles.path, async (req, res) => {
+    const market = (req.query.market as string) || "KRW-BTC";
+    const count = parseInt(req.query.count as string) || 60;
+    const candles = await upbitService.getCandles(market, Math.min(count, 200));
+    res.json(candles);
+  });
+
   app.get(api.upbit.status.path, requireAuth, async (req, res) => {
     const userId = getUserId(req);
     const marketOverride = req.query.market as string | undefined;

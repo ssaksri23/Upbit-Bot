@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell } from "@/hooks/use-upbit";
+import { useBotSettings, useUpbitStatus, useUpdateSettings, useTradeLogs, useVerifyApiKeys, useMarkets, useManualBuy, useManualSell, useCandles } from "@/hooks/use-upbit";
 import { StatusCard } from "@/components/dashboard/StatusCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,13 +24,17 @@ import {
   PiggyBank
 } from "lucide-react";
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid
+  CartesianGrid,
+  Area,
+  ReferenceLine,
+  Cell
 } from "recharts";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
@@ -63,6 +67,7 @@ export default function Dashboard() {
   const verifyKeys = useVerifyApiKeys();
   const manualBuy = useManualBuy();
   const manualSell = useManualSell();
+  const { data: candles } = useCandles(formState.market, 60);
   const [buyAmount, setBuyAmount] = useState("10000");
 
   useEffect(() => {
@@ -99,10 +104,70 @@ export default function Dashboard() {
     updateSettings.mutate({ isActive: !settings?.isActive });
   };
 
-  const chartData = Array.from({ length: 20 }).map((_, i) => ({
-    time: i,
-    price: status?.currentPrice ? status.currentPrice * (1 + (Math.random() * 0.02 - 0.01)) : 0
-  }));
+  // Calculate technical indicators
+  const calculateSMA = (data: number[], period: number): number[] => {
+    const sma: number[] = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i < period - 1) {
+        sma.push(data[i]);
+      } else {
+        const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+        sma.push(sum / period);
+      }
+    }
+    return sma;
+  };
+
+  const calculateBollingerBands = (data: number[], period: number = 20, stdDev: number = 2) => {
+    const sma = calculateSMA(data, period);
+    return data.map((_, i) => {
+      if (i < period - 1) return { upper: sma[i], middle: sma[i], lower: sma[i] };
+      const slice = data.slice(i - period + 1, i + 1);
+      const variance = slice.reduce((sum, val) => sum + Math.pow(val - sma[i], 2), 0) / period;
+      const std = Math.sqrt(variance);
+      return {
+        upper: sma[i] + (std * stdDev),
+        middle: sma[i],
+        lower: sma[i] - (std * stdDev),
+      };
+    });
+  };
+
+  // Prepare chart data with indicators
+  const chartData = candles?.map((candle, i, arr) => {
+    const prices = arr.slice(0, i + 1).map(c => c.close);
+    const sma5 = prices.length >= 5 ? prices.slice(-5).reduce((a, b) => a + b, 0) / 5 : candle.close;
+    const sma20 = prices.length >= 20 ? prices.slice(-20).reduce((a, b) => a + b, 0) / 20 : candle.close;
+    
+    let bb = { upper: candle.close, middle: candle.close, lower: candle.close };
+    if (prices.length >= 20) {
+      const slice = prices.slice(-20);
+      const mean = slice.reduce((a, b) => a + b, 0) / 20;
+      const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / 20;
+      const std = Math.sqrt(variance);
+      bb = { upper: mean + (std * 2), middle: mean, lower: mean - (std * 2) };
+    }
+
+    return {
+      time: format(new Date(candle.timestamp), 'HH:mm'),
+      timestamp: candle.timestamp,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume || 0,
+      sma5,
+      sma20,
+      bbUpper: bb.upper,
+      bbMiddle: bb.middle,
+      bbLower: bb.lower,
+      isUp: candle.close >= candle.open,
+    };
+  }) || [];
+
+  const priceChange = chartData.length >= 2 
+    ? ((chartData[chartData.length - 1]?.close || 0) - (chartData[0]?.close || 0)) / (chartData[0]?.close || 1) * 100 
+    : 0;
 
   const formatPrice = (price: number | string) => {
     return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(Number(price));
@@ -450,37 +515,178 @@ export default function Dashboard() {
         </Card>
 
         <div className="lg:col-span-2 space-y-8">
-          <Card className="h-[400px] flex flex-col" data-testid="card-price-chart">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2" data-testid="text-chart-title">
-                <TrendingUp className="w-5 h-5" />
-                {isKorean ? selectedMarket?.korean_name : selectedMarket?.english_name} ({formState.market})
-              </CardTitle>
+          <Card className="flex flex-col" data-testid="card-price-chart">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <CardTitle className="flex items-center gap-2" data-testid="text-chart-title">
+                  <TrendingUp className="w-5 h-5" />
+                  {isKorean ? selectedMarket?.korean_name : selectedMarket?.english_name} ({formState.market})
+                </CardTitle>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className={cn(
+                    "font-bold",
+                    priceChange >= 0 ? "text-green-500" : "text-red-500"
+                  )}>
+                    {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)}%
+                  </span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <div className="w-3 h-0.5 bg-yellow-500" /> SMA5
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <div className="w-3 h-0.5 bg-purple-500" /> SMA20
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <div className="w-3 h-0.5 bg-blue-400/50" /> BB
+                    </span>
+                  </div>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="flex-1 pb-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis dataKey="time" hide />
-                  <YAxis 
-                    domain={['auto', 'auto']} 
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    tickFormatter={(val) => `${val.toLocaleString()}`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
-                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="price" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <CardContent className="pb-4">
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis 
+                      dataKey="time" 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis 
+                      yAxisId="price"
+                      domain={['auto', 'auto']} 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}K` : val.toFixed(0)}
+                      tickLine={false}
+                      axisLine={false}
+                      width={50}
+                    />
+                    <YAxis 
+                      yAxisId="volume"
+                      orientation="right"
+                      domain={[0, (max: number) => max * 4]}
+                      hide
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        borderColor: 'hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
+                      formatter={(value: number, name: string) => {
+                        const labels: Record<string, string> = {
+                          close: isKorean ? '종가' : 'Close',
+                          open: isKorean ? '시가' : 'Open',
+                          high: isKorean ? '고가' : 'High',
+                          low: isKorean ? '저가' : 'Low',
+                          volume: isKorean ? '거래량' : 'Volume',
+                          sma5: 'SMA5',
+                          sma20: 'SMA20',
+                          bbUpper: isKorean ? '상단밴드' : 'Upper BB',
+                          bbLower: isKorean ? '하단밴드' : 'Lower BB',
+                        };
+                        return [name === 'volume' ? value.toFixed(4) : formatPrice(value), labels[name] || name];
+                      }}
+                    />
+                    
+                    <Area
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="bbUpper"
+                      stroke="transparent"
+                      fill="hsl(210 100% 60% / 0.1)"
+                      connectNulls
+                    />
+                    <Area
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="bbLower"
+                      stroke="transparent"
+                      fill="hsl(var(--background))"
+                      connectNulls
+                    />
+                    
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="bbUpper"
+                      stroke="hsl(210 100% 60% / 0.5)"
+                      strokeWidth={1}
+                      dot={false}
+                      strokeDasharray="3 3"
+                    />
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="bbLower"
+                      stroke="hsl(210 100% 60% / 0.5)"
+                      strokeWidth={1}
+                      dot={false}
+                      strokeDasharray="3 3"
+                    />
+                    
+                    <Bar yAxisId="volume" dataKey="volume" opacity={0.3}>
+                      {chartData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.isUp ? "hsl(142 76% 36%)" : "hsl(0 84% 60%)"} 
+                        />
+                      ))}
+                    </Bar>
+                    
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="sma20"
+                      stroke="hsl(280 100% 70%)"
+                      strokeWidth={1.5}
+                      dot={false}
+                    />
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="sma5"
+                      stroke="hsl(45 100% 50%)"
+                      strokeWidth={1.5}
+                      dot={false}
+                    />
+                    
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="close"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
+                <div className="bg-muted/50 rounded-md p-2 text-center">
+                  <div className="text-muted-foreground">{isKorean ? "시가" : "Open"}</div>
+                  <div className="font-mono font-medium">{chartData[chartData.length - 1]?.open?.toLocaleString() || "-"}</div>
+                </div>
+                <div className="bg-muted/50 rounded-md p-2 text-center">
+                  <div className="text-muted-foreground">{isKorean ? "고가" : "High"}</div>
+                  <div className="font-mono font-medium text-green-500">{chartData.length > 0 ? Math.max(...chartData.map(c => c.high)).toLocaleString() : "-"}</div>
+                </div>
+                <div className="bg-muted/50 rounded-md p-2 text-center">
+                  <div className="text-muted-foreground">{isKorean ? "저가" : "Low"}</div>
+                  <div className="font-mono font-medium text-red-500">{chartData.length > 0 ? Math.min(...chartData.map(c => c.low)).toLocaleString() : "-"}</div>
+                </div>
+                <div className="bg-muted/50 rounded-md p-2 text-center">
+                  <div className="text-muted-foreground">{isKorean ? "종가" : "Close"}</div>
+                  <div className="font-mono font-medium">{chartData[chartData.length - 1]?.close?.toLocaleString() || "-"}</div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

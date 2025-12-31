@@ -16,6 +16,18 @@ export function useMarkets() {
   });
 }
 
+export function useCandles(market: string, count: number = 60) {
+  return useQuery({
+    queryKey: [api.upbit.candles.path, market, count],
+    queryFn: async () => {
+      const res = await fetch(`${api.upbit.candles.path}?market=${encodeURIComponent(market)}&count=${count}`);
+      if (!res.ok) throw new Error("Failed to fetch candles");
+      return api.upbit.candles.responses[200].parse(await res.json());
+    },
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+}
+
 export function useUpbitStatus(market?: string) {
   return useQuery({
     queryKey: [api.upbit.status.path, market],

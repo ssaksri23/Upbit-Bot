@@ -122,6 +122,20 @@ export const api = {
         },
       },
     },
+    candles: {
+      method: 'GET' as const,
+      path: '/api/upbit/candles',
+      responses: {
+        200: z.array(z.object({
+          timestamp: z.number(),
+          open: z.number(),
+          high: z.number(),
+          low: z.number(),
+          close: z.number(),
+          volume: z.number().optional(),
+        })),
+      },
+    },
     trade: {
       buy: {
         method: 'POST' as const,

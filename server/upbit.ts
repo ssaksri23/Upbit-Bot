@@ -12,6 +12,7 @@ interface CandleData {
   high: number;
   low: number;
   close: number;
+  volume?: number;
 }
 
 export class UpbitService {
@@ -76,6 +77,7 @@ export class UpbitService {
         high: c.high_price,
         low: c.low_price,
         close: c.trade_price,
+        volume: c.candle_acc_trade_volume,
       })).reverse(); // Oldest first
     } catch (e) {
       console.error(`Failed to fetch candles for ${market}:`, e);
