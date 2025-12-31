@@ -28,8 +28,18 @@ import {
   ArrowUp,
   ArrowDown,
   Minus,
-  RefreshCw
+  RefreshCw,
+  HelpCircle,
+  ExternalLink
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   ComposedChart,
   Line,
@@ -610,7 +620,83 @@ export default function Dashboard() {
 
             <div className="space-y-2 pt-4 border-t border-border">
               <div className="flex items-center justify-between mb-2">
-                <Label className="font-semibold">API Keys</Label>
+                <div className="flex items-center gap-2">
+                  <Label className="font-semibold">API Keys</Label>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" data-testid="button-api-help">
+                        <HelpCircle className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>{isKorean ? "Upbit API 키 발급 방법" : "How to Get Upbit API Keys"}</DialogTitle>
+                        <DialogDescription>
+                          {isKorean ? "API 키를 발급받아 자동매매를 시작하세요" : "Get your API keys to start automated trading"}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 text-sm">
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "1. Upbit 로그인" : "1. Login to Upbit"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "Upbit 웹사이트에 로그인합니다." 
+                              : "Log in to the Upbit website."}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "2. Open API 관리 페이지 이동" : "2. Go to Open API Management"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "마이페이지 > Open API 관리 메뉴로 이동합니다." 
+                              : "Navigate to My Page > Open API Management."}
+                          </p>
+                          <a 
+                            href="https://upbit.com/mypage/open_api_management" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            {isKorean ? "Open API 관리 페이지 바로가기" : "Go to Open API Management"}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "3. API 키 발급" : "3. Create API Keys"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "'Open API Key 발급' 버튼을 클릭합니다." 
+                              : "Click 'Create Open API Key' button."}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "4. 권한 설정" : "4. Set Permissions"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "다음 권한을 선택하세요:\n- 자산조회\n- 주문조회\n- 주문하기 (자동매매에 필요)" 
+                              : "Select these permissions:\n- View Assets\n- View Orders\n- Place Orders (required for auto-trading)"}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "5. IP 허용 설정" : "5. IP Allowlist"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "'모든 IP 허용' 또는 이 서버 IP를 등록하세요:\n104.154.102.160" 
+                              : "Allow all IPs or register this server IP:\n104.154.102.160"}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">{isKorean ? "6. 키 복사" : "6. Copy Keys"}</h4>
+                          <p className="text-muted-foreground">
+                            {isKorean 
+                              ? "발급된 Access Key와 Secret Key를 복사하여 위 입력란에 붙여넣기 하세요.\n\n⚠️ Secret Key는 발급 시에만 확인 가능합니다. 반드시 안전하게 보관하세요." 
+                              : "Copy the Access Key and Secret Key and paste them in the fields above.\n\n⚠️ Secret Key is only shown once. Store it safely."}
+                          </p>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 {settings?.hasAccessKey ? (
                   <span className="text-xs flex items-center gap-1 text-green-500" data-testid="status-api-key-set">
                     <CheckCircle2 className="w-3 h-3" /> {t('dashboard.keySet')}
@@ -943,6 +1029,39 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      <Card className="mt-8 border-yellow-500/30 bg-yellow-500/5">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground">
+                {isKorean ? "투자 위험 고지 및 면책 조항" : "Investment Risk Disclaimer"}
+              </p>
+              <p>
+                {isKorean 
+                  ? "본 서비스는 암호화폐 자동매매 보조 도구로서, 투자 조언을 제공하지 않습니다. 암호화폐 투자는 원금 손실의 위험이 있으며, 과거의 수익률이 미래의 수익을 보장하지 않습니다."
+                  : "This service is a cryptocurrency auto-trading assistant tool and does not provide investment advice. Cryptocurrency investments carry the risk of principal loss, and past performance does not guarantee future results."}
+              </p>
+              <p>
+                {isKorean 
+                  ? "사용자는 본 서비스 이용으로 인해 발생하는 모든 투자 손실에 대해 전적으로 본인이 책임지며, 서비스 제공자는 어떠한 투자 손실에 대해서도 법적 책임을 지지 않습니다."
+                  : "Users are solely responsible for all investment losses incurred from using this service. The service provider assumes no legal liability for any investment losses."}
+              </p>
+              <p>
+                {isKorean 
+                  ? "자동매매 봇은 시장 상황, 네트워크 지연, API 오류 등으로 인해 예상과 다르게 작동할 수 있습니다. 투자 결정은 신중하게 본인의 판단 하에 이루어져야 합니다."
+                  : "The auto-trading bot may operate differently than expected due to market conditions, network delays, API errors, etc. Investment decisions should be made carefully based on your own judgment."}
+              </p>
+              <p className="text-xs">
+                {isKorean 
+                  ? "본 서비스를 이용함으로써 위 면책 조항에 동의하는 것으로 간주됩니다."
+                  : "By using this service, you are deemed to agree to the above disclaimer."}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
