@@ -9,7 +9,7 @@ export function Footer() {
     <footer className="border-t border-border/40 bg-background/95 mt-8">
       <div className="container px-4 py-6">
         {/* Coupang Partners Banner */}
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-6 overflow-hidden">
           <iframe 
             src="https://ads-partners.coupang.com/widgets.html?id=954378&template=carousel&trackingCode=AF4646383&subId=&width=680&height=140&tsource=" 
             width="680" 
@@ -17,7 +17,9 @@ export function Footer() {
             frameBorder="0" 
             scrolling="no" 
             referrerPolicy="unsafe-url"
-            className="max-w-full"
+            className="max-w-full border-0"
+            style={{ minHeight: '140px' }}
+            title="Coupang Partners"
           />
         </div>
         
