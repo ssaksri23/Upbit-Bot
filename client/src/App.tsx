@@ -7,7 +7,6 @@ import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/hooks/use-auth";
 import Dashboard from "@/pages/Dashboard";
 import Landing from "@/pages/Landing";
-import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
 import "@/lib/i18n"; // Initialize i18n
 import { Loader2 } from "lucide-react";
@@ -32,7 +31,6 @@ function Router() {
       <Header />
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </>
