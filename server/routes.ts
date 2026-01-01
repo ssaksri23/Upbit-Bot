@@ -112,6 +112,7 @@ export async function registerRoutes(
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      isAdmin: user.isAdmin || false,
     });
   });
 

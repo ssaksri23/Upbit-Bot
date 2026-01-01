@@ -5,6 +5,7 @@ interface AuthUser {
   id: string;
   email: string;
   displayName?: string | null;
+  isAdmin?: boolean;
 }
 
 async function fetchUser(): Promise<AuthUser | null> {
