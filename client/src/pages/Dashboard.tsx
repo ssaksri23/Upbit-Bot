@@ -61,7 +61,6 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { CoupangAd } from "@/components/ads/CoupangAd";
 
 const STRATEGIES = [
   { value: "percent", label: "변동률 매매", labelEn: "Percent Trading", desc: "일정 비율 변동 시 매수/매도", descEn: "Buy on drops, sell on rises" },
@@ -1227,16 +1226,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <Card className="mt-8">
-        <CardContent className="py-4">
-          <p className="text-xs text-muted-foreground text-center mb-2">
-            {isKorean ? "파트너스 활동을 통해 수수료를 받을 수 있습니다" : "This post contains affiliate links"}
-          </p>
-          <CoupangAd />
-        </CardContent>
-      </Card>
-
-      <Card className="mt-4 border-yellow-500/30 bg-yellow-500/5">
+      <Card className="mt-8 border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
