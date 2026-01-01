@@ -877,8 +877,8 @@ export default function Dashboard() {
                           <h4 className="font-semibold">{isKorean ? "5. IP 허용 설정" : "5. IP Allowlist"}</h4>
                           <p className="text-muted-foreground">
                             {isKorean 
-                              ? "'모든 IP 허용' 또는 이 서버 IP를 등록하세요:\n104.154.102.160" 
-                              : "Allow all IPs or register this server IP:\n104.154.102.160"}
+                              ? "'모든 IP 허용'을 선택하세요.\n\n문의: 0507-1319-0641" 
+                              : "Select 'Allow all IPs'.\n\nContact: 0507-1319-0641"}
                           </p>
                         </div>
                         <div className="space-y-2">
