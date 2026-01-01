@@ -160,8 +160,6 @@ export async function registerRoutes(
          targetAmount: "10000",
          hasAccessKey: false,
          hasSecretKey: false,
-         portfolioMarkets: null,
-         portfolioAllocations: null,
        });
     }
     res.json({
@@ -173,8 +171,6 @@ export async function registerRoutes(
       targetAmount: settings.targetAmount,
       hasAccessKey: !!settings.upbitAccessKey,
       hasSecretKey: !!settings.upbitSecretKey,
-      portfolioMarkets: settings.portfolioMarkets || null,
-      portfolioAllocations: settings.portfolioAllocations || null,
     });
   });
 

@@ -107,8 +107,6 @@ export const api = {
             targetAmount: z.string(),
             hasAccessKey: z.boolean(),
             hasSecretKey: z.boolean(),
-            portfolioMarkets: z.string().optional().nullable(),
-            portfolioAllocations: z.string().optional().nullable(),
           }),
           401: errorSchemas.unauthorized,
         },
