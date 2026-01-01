@@ -20,9 +20,25 @@ export class UpbitService {
   private baseUrl = "https://api.upbit.com/v1";
   private isRunning = false;
   private priceHistory: Map<string, CandleData[]> = new Map(); // market -> candles
+  private ipErrorCache: Map<string, number> = new Map(); // userId -> timestamp of last IP error
+  private IP_ERROR_CACHE_DURATION = 60000; // 1 minute cache for IP errors
 
   constructor(storage: IStorage) {
     this.storage = storage;
+  }
+  
+  private isIpErrorCached(userId: string): boolean {
+    const lastError = this.ipErrorCache.get(userId);
+    if (!lastError) return false;
+    if (Date.now() - lastError > this.IP_ERROR_CACHE_DURATION) {
+      this.ipErrorCache.delete(userId);
+      return false;
+    }
+    return true;
+  }
+  
+  private cacheIpError(userId: string): void {
+    this.ipErrorCache.set(userId, Date.now());
   }
 
   private getAuthToken(accessKey: string, secretKey: string, query?: string) {
@@ -223,7 +239,7 @@ export class UpbitService {
     let balanceKRW = 0;
     let balanceCoin = 0;
 
-    if (settings?.upbitAccessKey && settings?.upbitSecretKey) {
+    if (settings?.upbitAccessKey && settings?.upbitSecretKey && !this.isIpErrorCached(userId)) {
       try {
         const token = this.getAuthToken(settings.upbitAccessKey, settings.upbitSecretKey);
         const accountsRes = await axios.get(`${this.baseUrl}/accounts`, {
@@ -237,6 +253,10 @@ export class UpbitService {
         balanceCoin = coinAccount ? parseFloat(coinAccount.balance) : 0;
       } catch (e: any) {
         if (e.response?.data?.error) {
+          const errorName = e.response.data.error.name;
+          if (errorName === "no_authorization_ip") {
+            this.cacheIpError(userId);
+          }
           console.error("Upbit API error:", e.response.data.error);
         }
       }
