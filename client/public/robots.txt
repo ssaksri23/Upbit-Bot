@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://richbot.co.kr/sitemap.xml

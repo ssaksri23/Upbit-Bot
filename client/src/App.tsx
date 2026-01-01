@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/hooks/use-auth";
 import Dashboard from "@/pages/Dashboard";
 import Landing from "@/pages/Landing";
@@ -28,14 +29,17 @@ function Router() {
   }
 
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <Header />
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/admin" component={Admin} />
-        <Route component={NotFound} />
-      </Switch>
-    </>
+      <main className="flex-1">
+        <Switch>
+          <Route path="/" component={Dashboard} />
+          <Route path="/admin" component={Admin} />
+          <Route component={NotFound} />
+        </Switch>
+      </main>
+      <Footer />
+    </div>
   );
 }
 
