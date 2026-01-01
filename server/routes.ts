@@ -360,5 +360,113 @@ export async function registerRoutes(
     }
   });
 
+  // Admin middleware
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = await storage.getUserById(req.session.userId);
+    if (!user?.isAdmin) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  };
+
+  // Admin routes
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(u => ({
+        id: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        subscriptionTier: u.subscriptionTier || 'free',
+        subscriptionExpiry: u.subscriptionExpiry,
+        createdAt: u.createdAt,
+        isAdmin: u.isAdmin
+      })));
+    } catch (e) {
+      console.error("Admin users error:", e);
+      res.status(500).json({ message: "Failed to get users" });
+    }
+  });
+
+  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getAdminStats();
+      res.json(stats);
+    } catch (e) {
+      console.error("Admin stats error:", e);
+      res.status(500).json({ message: "Failed to get stats" });
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/subscription", requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { tier, expiry } = req.body;
+      const user = await storage.updateUserSubscription(userId, tier, expiry ? new Date(expiry) : undefined);
+      res.json(user);
+    } catch (e) {
+      console.error("Update subscription error:", e);
+      res.status(500).json({ message: "Failed to update subscription" });
+    }
+  });
+
+  // Announcements routes
+  app.get("/api/announcements", async (req, res) => {
+    try {
+      const announcements = await storage.getAnnouncements(true);
+      res.json(announcements);
+    } catch (e) {
+      console.error("Get announcements error:", e);
+      res.status(500).json({ message: "Failed to get announcements" });
+    }
+  });
+
+  app.get("/api/admin/announcements", requireAdmin, async (req, res) => {
+    try {
+      const announcements = await storage.getAnnouncements(false);
+      res.json(announcements);
+    } catch (e) {
+      console.error("Get all announcements error:", e);
+      res.status(500).json({ message: "Failed to get announcements" });
+    }
+  });
+
+  app.post("/api/admin/announcements", requireAdmin, async (req, res) => {
+    try {
+      const { title, content, isActive } = req.body;
+      const announcement = await storage.createAnnouncement({ title, content, isActive });
+      res.json(announcement);
+    } catch (e) {
+      console.error("Create announcement error:", e);
+      res.status(500).json({ message: "Failed to create announcement" });
+    }
+  });
+
+  app.patch("/api/admin/announcements/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { title, content, isActive } = req.body;
+      const announcement = await storage.updateAnnouncement(id, { title, content, isActive });
+      res.json(announcement);
+    } catch (e) {
+      console.error("Update announcement error:", e);
+      res.status(500).json({ message: "Failed to update announcement" });
+    }
+  });
+
+  app.delete("/api/admin/announcements/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteAnnouncement(id);
+      res.json({ success: true });
+    } catch (e) {
+      console.error("Delete announcement error:", e);
+      res.status(500).json({ message: "Failed to delete announcement" });
+    }
+  });
+
   return httpServer;
 }
