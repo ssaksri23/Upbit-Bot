@@ -124,15 +124,15 @@ export default function Dashboard() {
         portfolioAllocations: allocations,
       }));
       
-      if (portfolioMarketsArr.length > 0) {
-        setShowMultiCoin(true);
-      }
+      // Set multi-coin mode based on saved portfolio data
+      setShowMultiCoin(portfolioMarketsArr.length > 0);
     }
   }, [settings]);
 
   const handleSave = () => {
-    const portfolioMarketsStr = formState.portfolioMarkets.join(',');
-    const portfolioAllocationsStr = formState.portfolioMarkets.map(m => formState.portfolioAllocations[m] || 0).join(',');
+    // Only save portfolio data if in multi-coin mode
+    const portfolioMarketsStr = showMultiCoin ? formState.portfolioMarkets.join(',') : '';
+    const portfolioAllocationsStr = showMultiCoin ? formState.portfolioMarkets.map(m => formState.portfolioAllocations[m] || 0).join(',') : '';
     
     updateSettings.mutate({
       market: formState.market,
@@ -142,8 +142,8 @@ export default function Dashboard() {
       targetAmount: formState.targetAmount,
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
-      portfolioMarkets: portfolioMarketsStr || undefined,
-      portfolioAllocations: portfolioAllocationsStr || undefined,
+      portfolioMarkets: portfolioMarketsStr,
+      portfolioAllocations: portfolioAllocationsStr,
     }, {
       onSuccess: () => {
         setFormState(prev => ({
