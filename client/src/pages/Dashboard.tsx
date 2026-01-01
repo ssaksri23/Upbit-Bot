@@ -124,9 +124,8 @@ export default function Dashboard() {
         portfolioAllocations: allocations,
       }));
       
-      if (portfolioMarketsArr.length > 0) {
-        setShowMultiCoin(true);
-      }
+      // Set multi-coin mode based on saved portfolio settings
+      setShowMultiCoin(portfolioMarketsArr.length > 0);
     }
   }, [settings]);
 
