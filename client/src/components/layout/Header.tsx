@@ -1,7 +1,8 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import { LogOut, Globe, TrendingUp } from "lucide-react";
+import { LogOut, Globe, TrendingUp, Crown } from "lucide-react";
+import { Link } from "wouter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,13 +50,22 @@ export function Header() {
           {user && (
             <div className="flex items-center gap-4">
               <span className="hidden md:inline-block text-sm font-medium text-muted-foreground">
-                {user.username}
+                {user.displayName || user.email}
               </span>
+              {user.isAdmin && (
+                <Link href="/admin">
+                  <Button variant="ghost" size="sm" className="gap-2" data-testid="button-admin">
+                    <Crown className="h-4 w-4 text-yellow-500" />
+                    Admin
+                  </Button>
+                </Link>
+              )}
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={() => logout()}
                 className="gap-2"
+                data-testid="button-logout"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
