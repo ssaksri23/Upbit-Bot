@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { Phone } from "lucide-react";
 
 export function Footer() {
   const { i18n } = useTranslation();
@@ -25,10 +24,6 @@ export function Footer() {
         
         {/* Footer Info */}
         <div className="text-center text-xs text-muted-foreground space-y-2">
-          <p className="flex items-center justify-center gap-2">
-            <Phone className="w-3 h-3" />
-            <span>{isKorean ? "문의: 0507-1319-0641" : "Contact: 0507-1319-0641"}</span>
-          </p>
           <p>
             {isKorean 
               ? "이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
