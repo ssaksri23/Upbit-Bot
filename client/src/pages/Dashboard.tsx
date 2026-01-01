@@ -1226,7 +1226,27 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <Card className="mt-8 border-yellow-500/30 bg-yellow-500/5">
+      {/* Coupang Partners Banner */}
+      <div className="mt-8 flex flex-col items-center">
+        <iframe 
+          src="https://ads-partners.coupang.com/widgets.html?id=954378&template=carousel&trackingCode=AF4646383&subId=&width=680&height=140&tsource=" 
+          width="680" 
+          height="140" 
+          frameBorder="0" 
+          scrolling="no" 
+          referrerPolicy="unsafe-url"
+          className="max-w-full border-0"
+          style={{ minHeight: '140px' }}
+          title="Coupang Partners"
+        />
+        <p className="text-xs text-muted-foreground mt-2">
+          {isKorean 
+            ? "이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
+            : "This post is part of Coupang Partners activities and receives a commission accordingly."}
+        </p>
+      </div>
+
+      <Card className="mt-4 border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
