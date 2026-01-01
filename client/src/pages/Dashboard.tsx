@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { 
   Activity, 
@@ -74,6 +77,9 @@ const STRATEGIES = [
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const { data: settings } = useBotSettings();
+  const [isMultiCoinMode, setIsMultiCoinMode] = useState(false);
+  const [selectedCoins, setSelectedCoins] = useState<string[]>([]);
+  const [coinAllocations, setCoinAllocations] = useState<Record<string, number>>({});
   const [formState, setFormState] = useState({
     market: "KRW-BTC",
     strategy: "percent",
@@ -108,17 +114,40 @@ export default function Dashboard() {
         sellThreshold: settings.sellThreshold || "0.5",
         targetAmount: settings.targetAmount || "10000",
       }));
+      
+      if (settings.portfolioMarkets) {
+        const coins = settings.portfolioMarkets.split(',').filter(Boolean);
+        setSelectedCoins(coins);
+        setIsMultiCoinMode(coins.length > 0);
+        
+        if (settings.portfolioAllocations) {
+          const allocs = settings.portfolioAllocations.split(',').map(Number);
+          const allocMap: Record<string, number> = {};
+          coins.forEach((coin, i) => {
+            allocMap[coin] = allocs[i] || Math.floor(100 / coins.length);
+          });
+          setCoinAllocations(allocMap);
+        }
+      }
     }
   }, [settings]);
 
   const handleSave = () => {
+    const portfolioData = isMultiCoinMode && selectedCoins.length > 0 ? {
+      portfolioMarkets: selectedCoins.join(','),
+      portfolioAllocations: selectedCoins.map(c => coinAllocations[c] || Math.floor(100 / selectedCoins.length)).join(','),
+    } : {
+      portfolioMarkets: '',
+      portfolioAllocations: '',
+    };
+    
     updateSettings.mutate({
       ...formState,
+      ...portfolioData,
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
     }, {
       onSuccess: () => {
-        // Clear API key fields after successful save
         setFormState(prev => ({
           ...prev,
           upbitAccessKey: "",
@@ -127,6 +156,31 @@ export default function Dashboard() {
       }
     });
   };
+  
+  const toggleCoinSelection = (market: string) => {
+    setSelectedCoins(prev => {
+      if (prev.includes(market)) {
+        const newCoins = prev.filter(c => c !== market);
+        const newAllocs = { ...coinAllocations };
+        delete newAllocs[market];
+        setCoinAllocations(newAllocs);
+        return newCoins;
+      } else {
+        const newCoins = [...prev, market];
+        const equalAlloc = Math.floor(100 / newCoins.length);
+        const newAllocs: Record<string, number> = {};
+        newCoins.forEach(c => newAllocs[c] = equalAlloc);
+        setCoinAllocations(newAllocs);
+        return newCoins;
+      }
+    });
+  };
+  
+  const updateAllocation = (market: string, value: number) => {
+    setCoinAllocations(prev => ({ ...prev, [market]: value }));
+  };
+  
+  const totalAllocation = Object.values(coinAllocations).reduce((a, b) => a + b, 0);
 
   const toggleActive = () => {
     updateSettings.mutate({ isActive: !settings?.isActive });
@@ -638,30 +692,112 @@ export default function Dashboard() {
 
             <div className="space-y-2">
               <Label>{t('dashboard.market')}</Label>
-              <Select 
-                value={formState.market} 
-                onValueChange={(value) => setFormState({...formState, market: value})}
+              <Tabs 
+                value={isMultiCoinMode ? "multi" : "single"} 
+                onValueChange={(v) => setIsMultiCoinMode(v === "multi")}
+                className="w-full"
               >
-                <SelectTrigger data-testid="select-market">
-                  <SelectValue placeholder="Select market" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  {marketsLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </div>
-                  ) : (
-                    markets?.map((m) => (
-                      <SelectItem key={m.market} value={m.market} data-testid={`market-option-${m.market}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
-                          <span>{isKorean ? m.korean_name : m.english_name}</span>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="single" data-testid="tab-single-coin">
+                    {isKorean ? "단일 종목" : "Single Coin"}
+                  </TabsTrigger>
+                  <TabsTrigger value="multi" data-testid="tab-multi-coin">
+                    {isKorean ? "다중 종목" : "Multi Coin"}
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="single" className="mt-2">
+                  <Select 
+                    value={formState.market} 
+                    onValueChange={(value) => setFormState({...formState, market: value})}
+                  >
+                    <SelectTrigger data-testid="select-market">
+                      <SelectValue placeholder="Select market" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {marketsLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         </div>
-                      </SelectItem>
-                    ))
+                      ) : (
+                        markets?.map((m) => (
+                          <SelectItem key={m.market} value={m.market} data-testid={`market-option-${m.market}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
+                              <span>{isKorean ? m.korean_name : m.english_name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </TabsContent>
+                
+                <TabsContent value="multi" className="mt-2 space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    {isKorean ? `선택됨: ${selectedCoins.length}개` : `Selected: ${selectedCoins.length}`}
+                    {selectedCoins.length > 0 && (
+                      <span className={cn("ml-2", totalAllocation === 100 ? "text-green-500" : "text-yellow-500")}>
+                        ({isKorean ? "배분" : "Alloc"}: {totalAllocation}%)
+                      </span>
+                    )}
+                  </div>
+                  
+                  <ScrollArea className="h-[200px] border rounded-md p-2">
+                    {marketsLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {markets?.map((m) => (
+                          <div 
+                            key={m.market}
+                            className={cn(
+                              "flex items-center gap-2 p-2 rounded hover-elevate cursor-pointer",
+                              selectedCoins.includes(m.market) && "bg-primary/10"
+                            )}
+                            onClick={() => toggleCoinSelection(m.market)}
+                            data-testid={`coin-checkbox-${m.market}`}
+                          >
+                            <Checkbox 
+                              checked={selectedCoins.includes(m.market)}
+                              onCheckedChange={() => toggleCoinSelection(m.market)}
+                            />
+                            <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
+                            <span className="text-sm flex-1">{isKorean ? m.korean_name : m.english_name}</span>
+                            {selectedCoins.includes(m.market) && (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  value={coinAllocations[m.market] || 0}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    updateAllocation(m.market, parseInt(e.target.value) || 0);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-14 h-7 text-xs text-center"
+                                  min={0}
+                                  max={100}
+                                  data-testid={`input-allocation-${m.market}`}
+                                />
+                                <span className="text-xs text-muted-foreground">%</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  
+                  {selectedCoins.length > 0 && totalAllocation !== 100 && (
+                    <div className="text-xs text-yellow-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {isKorean ? "배분 합계가 100%가 아닙니다" : "Allocation should total 100%"}
+                    </div>
                   )}
-                </SelectContent>
-              </Select>
+                </TabsContent>
+              </Tabs>
             </div>
 
             <div className="space-y-2">
