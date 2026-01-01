@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { 
@@ -77,9 +77,6 @@ const STRATEGIES = [
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const { data: settings } = useBotSettings();
-  const [isMultiCoinMode, setIsMultiCoinMode] = useState(false);
-  const [selectedCoins, setSelectedCoins] = useState<string[]>([]);
-  const [coinAllocations, setCoinAllocations] = useState<Record<string, number>>({});
   const [formState, setFormState] = useState({
     market: "KRW-BTC",
     strategy: "percent",
@@ -88,7 +85,10 @@ export default function Dashboard() {
     targetAmount: "10000",
     upbitAccessKey: "",
     upbitSecretKey: "",
+    portfolioMarkets: [] as string[],
+    portfolioAllocations: {} as Record<string, number>,
   });
+  const [showMultiCoin, setShowMultiCoin] = useState(false);
   const { data: status } = useUpbitStatus(formState.market);
   const { data: logs } = useTradeLogs();
   const { data: markets, isLoading: marketsLoading } = useMarkets();
@@ -106,6 +106,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (settings) {
+      const portfolioMarketsArr = settings.portfolioMarkets ? settings.portfolioMarkets.split(',').filter(Boolean) : [];
+      const portfolioAllocationsArr = settings.portfolioAllocations ? settings.portfolioAllocations.split(',').filter(Boolean) : [];
+      const allocations: Record<string, number> = {};
+      portfolioMarketsArr.forEach((m: string, i: number) => {
+        allocations[m] = Number(portfolioAllocationsArr[i]) || Math.floor(100 / portfolioMarketsArr.length);
+      });
+      
       setFormState(prev => ({
         ...prev,
         market: settings.market,
@@ -113,39 +120,30 @@ export default function Dashboard() {
         buyThreshold: settings.buyThreshold || "0.5",
         sellThreshold: settings.sellThreshold || "0.5",
         targetAmount: settings.targetAmount || "10000",
+        portfolioMarkets: portfolioMarketsArr,
+        portfolioAllocations: allocations,
       }));
       
-      if (settings.portfolioMarkets) {
-        const coins = settings.portfolioMarkets.split(',').filter(Boolean);
-        setSelectedCoins(coins);
-        setIsMultiCoinMode(coins.length > 0);
-        
-        if (settings.portfolioAllocations) {
-          const allocs = settings.portfolioAllocations.split(',').map(Number);
-          const allocMap: Record<string, number> = {};
-          coins.forEach((coin, i) => {
-            allocMap[coin] = allocs[i] || Math.floor(100 / coins.length);
-          });
-          setCoinAllocations(allocMap);
-        }
+      if (portfolioMarketsArr.length > 0) {
+        setShowMultiCoin(true);
       }
     }
   }, [settings]);
 
   const handleSave = () => {
-    const portfolioData = isMultiCoinMode && selectedCoins.length > 0 ? {
-      portfolioMarkets: selectedCoins.join(','),
-      portfolioAllocations: selectedCoins.map(c => coinAllocations[c] || Math.floor(100 / selectedCoins.length)).join(','),
-    } : {
-      portfolioMarkets: '',
-      portfolioAllocations: '',
-    };
+    const portfolioMarketsStr = formState.portfolioMarkets.join(',');
+    const portfolioAllocationsStr = formState.portfolioMarkets.map(m => formState.portfolioAllocations[m] || 0).join(',');
     
     updateSettings.mutate({
-      ...formState,
-      ...portfolioData,
+      market: formState.market,
+      strategy: formState.strategy,
+      buyThreshold: formState.buyThreshold,
+      sellThreshold: formState.sellThreshold,
+      targetAmount: formState.targetAmount,
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
+      portfolioMarkets: portfolioMarketsStr || undefined,
+      portfolioAllocations: portfolioAllocationsStr || undefined,
     }, {
       onSuccess: () => {
         setFormState(prev => ({
@@ -157,30 +155,43 @@ export default function Dashboard() {
     });
   };
   
-  const toggleCoinSelection = (market: string) => {
-    setSelectedCoins(prev => {
-      if (prev.includes(market)) {
-        const newCoins = prev.filter(c => c !== market);
-        const newAllocs = { ...coinAllocations };
-        delete newAllocs[market];
-        setCoinAllocations(newAllocs);
-        return newCoins;
+  const toggleMarketSelection = (market: string) => {
+    setFormState(prev => {
+      const isSelected = prev.portfolioMarkets.includes(market);
+      let newMarkets: string[];
+      let newAllocations = { ...prev.portfolioAllocations };
+      
+      if (isSelected) {
+        newMarkets = prev.portfolioMarkets.filter(m => m !== market);
+        delete newAllocations[market];
       } else {
-        const newCoins = [...prev, market];
-        const equalAlloc = Math.floor(100 / newCoins.length);
-        const newAllocs: Record<string, number> = {};
-        newCoins.forEach(c => newAllocs[c] = equalAlloc);
-        setCoinAllocations(newAllocs);
-        return newCoins;
+        newMarkets = [...prev.portfolioMarkets, market];
+        const equalShare = Math.floor(100 / (newMarkets.length || 1));
+        newMarkets.forEach(m => {
+          newAllocations[m] = equalShare;
+        });
       }
+      
+      return {
+        ...prev,
+        portfolioMarkets: newMarkets,
+        portfolioAllocations: newAllocations,
+        market: newMarkets.length > 0 ? newMarkets[0] : prev.market,
+      };
     });
   };
   
   const updateAllocation = (market: string, value: number) => {
-    setCoinAllocations(prev => ({ ...prev, [market]: value }));
+    setFormState(prev => ({
+      ...prev,
+      portfolioAllocations: {
+        ...prev.portfolioAllocations,
+        [market]: value,
+      }
+    }));
   };
   
-  const totalAllocation = Object.values(coinAllocations).reduce((a, b) => a + b, 0);
+  const totalAllocation = Object.values(formState.portfolioAllocations).reduce((sum, v) => sum + v, 0);
 
   const toggleActive = () => {
     updateSettings.mutate({ isActive: !settings?.isActive });
@@ -691,113 +702,137 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-2">
-              <Label>{t('dashboard.market')}</Label>
-              <Tabs 
-                value={isMultiCoinMode ? "multi" : "single"} 
-                onValueChange={(v) => setIsMultiCoinMode(v === "multi")}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="single" data-testid="tab-single-coin">
-                    {isKorean ? "단일 종목" : "Single Coin"}
-                  </TabsTrigger>
-                  <TabsTrigger value="multi" data-testid="tab-multi-coin">
-                    {isKorean ? "다중 종목" : "Multi Coin"}
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="single" className="mt-2">
-                  <Select 
-                    value={formState.market} 
-                    onValueChange={(value) => setFormState({...formState, market: value})}
-                  >
-                    <SelectTrigger data-testid="select-market">
-                      <SelectValue placeholder="Select market" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      {marketsLoading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        </div>
-                      ) : (
-                        markets?.map((m) => (
-                          <SelectItem key={m.market} value={m.market} data-testid={`market-option-${m.market}`}>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
-                              <span>{isKorean ? m.korean_name : m.english_name}</span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </TabsContent>
-                
-                <TabsContent value="multi" className="mt-2 space-y-3">
-                  <div className="text-xs text-muted-foreground">
-                    {isKorean ? `선택됨: ${selectedCoins.length}개` : `Selected: ${selectedCoins.length}`}
-                    {selectedCoins.length > 0 && (
-                      <span className={cn("ml-2", totalAllocation === 100 ? "text-green-500" : "text-yellow-500")}>
-                        ({isKorean ? "배분" : "Alloc"}: {totalAllocation}%)
-                      </span>
-                    )}
-                  </div>
-                  
-                  <ScrollArea className="h-[200px] border rounded-md p-2">
+              <div className="flex items-center justify-between">
+                <Label>{isKorean ? "투자 종목" : "Trading Coins"}</Label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowMultiCoin(!showMultiCoin)}
+                  className="text-xs"
+                  data-testid="button-toggle-multi-coin"
+                >
+                  {showMultiCoin 
+                    ? (isKorean ? "단일 종목" : "Single") 
+                    : (isKorean ? "다중 종목" : "Multi")}
+                </Button>
+              </div>
+              
+              {!showMultiCoin ? (
+                <Select 
+                  value={formState.market} 
+                  onValueChange={(value) => setFormState({...formState, market: value})}
+                >
+                  <SelectTrigger data-testid="select-market">
+                    <SelectValue placeholder="Select market" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
                     {marketsLoading ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
                     ) : (
-                      <div className="space-y-1">
-                        {markets?.map((m) => (
+                      markets?.map((m) => (
+                        <SelectItem key={m.market} value={m.market} data-testid={`market-option-${m.market}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
+                            <span>{isKorean ? m.korean_name : m.english_name}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-3">
+                  {/* Selected coins with allocation */}
+                  {formState.portfolioMarkets.length > 0 && (
+                    <div className="space-y-2 p-3 rounded-lg bg-secondary/30 border border-border">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                        <span>{isKorean ? "선택된 종목" : "Selected"}: {formState.portfolioMarkets.length}</span>
+                        <span className={cn(
+                          totalAllocation === 100 ? "text-green-500" : "text-yellow-500"
+                        )}>
+                          {isKorean ? "배분" : "Alloc"}: {totalAllocation}%
+                        </span>
+                      </div>
+                      {formState.portfolioMarkets.map((market) => {
+                        const marketInfo = markets?.find(m => m.market === market);
+                        return (
+                          <div key={market} className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-500"
+                              onClick={() => toggleMarketSelection(market)}
+                            >
+                              ×
+                            </Button>
+                            <Badge variant="secondary" className="font-mono text-xs">
+                              {market.split('-')[1]}
+                            </Badge>
+                            <span className="text-xs flex-1 truncate">
+                              {isKorean ? marketInfo?.korean_name : marketInfo?.english_name}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={formState.portfolioAllocations[market] || 0}
+                                onChange={(e) => updateAllocation(market, Number(e.target.value))}
+                                className="w-16 h-7 text-xs text-center"
+                                min="0"
+                                max="100"
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Market selection list */}
+                  <ScrollArea className="h-[200px] rounded-lg border border-border">
+                    <div className="p-2 space-y-1">
+                      {marketsLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                      ) : (
+                        markets?.slice(0, 50).map((m) => (
                           <div 
                             key={m.market}
                             className={cn(
-                              "flex items-center gap-2 p-2 rounded hover-elevate cursor-pointer",
-                              selectedCoins.includes(m.market) && "bg-primary/10"
+                              "flex items-center gap-2 p-2 rounded cursor-pointer hover-elevate",
+                              formState.portfolioMarkets.includes(m.market) && "bg-primary/10"
                             )}
-                            onClick={() => toggleCoinSelection(m.market)}
-                            data-testid={`coin-checkbox-${m.market}`}
+                            onClick={() => toggleMarketSelection(m.market)}
+                            data-testid={`market-checkbox-${m.market}`}
                           >
                             <Checkbox 
-                              checked={selectedCoins.includes(m.market)}
-                              onCheckedChange={() => toggleCoinSelection(m.market)}
+                              checked={formState.portfolioMarkets.includes(m.market)}
+                              onCheckedChange={() => toggleMarketSelection(m.market)}
                             />
-                            <span className="font-mono text-xs text-muted-foreground">{m.market.split('-')[1]}</span>
-                            <span className="text-sm flex-1">{isKorean ? m.korean_name : m.english_name}</span>
-                            {selectedCoins.includes(m.market) && (
-                              <div className="flex items-center gap-1">
-                                <Input
-                                  type="number"
-                                  value={coinAllocations[m.market] || 0}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    updateAllocation(m.market, parseInt(e.target.value) || 0);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="w-14 h-7 text-xs text-center"
-                                  min={0}
-                                  max={100}
-                                  data-testid={`input-allocation-${m.market}`}
-                                />
-                                <span className="text-xs text-muted-foreground">%</span>
-                              </div>
-                            )}
+                            <span className="font-mono text-xs text-muted-foreground w-12">
+                              {m.market.split('-')[1]}
+                            </span>
+                            <span className="text-sm truncate">
+                              {isKorean ? m.korean_name : m.english_name}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        ))
+                      )}
+                    </div>
                   </ScrollArea>
                   
-                  {selectedCoins.length > 0 && totalAllocation !== 100 && (
-                    <div className="text-xs text-yellow-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {isKorean ? "배분 합계가 100%가 아닙니다" : "Allocation should total 100%"}
-                    </div>
+                  {totalAllocation !== 100 && formState.portfolioMarkets.length > 0 && (
+                    <p className="text-xs text-yellow-500">
+                      {isKorean 
+                        ? `배분 합계가 100%가 되어야 합니다 (현재: ${totalAllocation}%)` 
+                        : `Allocation must total 100% (current: ${totalAllocation}%)`}
+                    </p>
                   )}
-                </TabsContent>
-              </Tabs>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

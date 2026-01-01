@@ -43,6 +43,16 @@ Preferred communication style: Simple, everyday language.
 - **Polling**: Dashboard polls `/api/upbit/status` every 2 seconds for real-time updates
 - **Storage Abstraction**: `IStorage` interface in `server/storage.ts` abstracts database operations
 
+### Multi-Coin Portfolio Trading
+- **Feature**: Users can select multiple coins with percentage allocation
+- **Storage**: `portfolioMarkets` (comma-separated markets) and `portfolioAllocations` (comma-separated percentages)
+- **Execution**: Bot distributes `targetAmount` across markets based on allocation percentages
+- **Minimum Order**: Each market allocation must be at least 5000 KRW (Upbit minimum)
+- **Known Limitation**: Trading state (referencePrice, lastTradeTime) is shared per user, not per market. This means:
+  - The cooldown timer applies across all coins
+  - Price reference is shared (not optimal for independent coin strategies)
+  - Future improvement: Implement per-market state storage for better multi-coin support
+
 ## External Dependencies
 
 ### Third-Party APIs

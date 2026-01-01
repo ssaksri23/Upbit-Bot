@@ -20,25 +20,9 @@ export class UpbitService {
   private baseUrl = "https://api.upbit.com/v1";
   private isRunning = false;
   private priceHistory: Map<string, CandleData[]> = new Map(); // market -> candles
-  private ipErrorCache: Map<string, number> = new Map(); // userId -> timestamp of last IP error
-  private IP_ERROR_CACHE_DURATION = 60000; // 1 minute cache for IP errors
 
   constructor(storage: IStorage) {
     this.storage = storage;
-  }
-  
-  private isIpErrorCached(userId: string): boolean {
-    const lastError = this.ipErrorCache.get(userId);
-    if (!lastError) return false;
-    if (Date.now() - lastError > this.IP_ERROR_CACHE_DURATION) {
-      this.ipErrorCache.delete(userId);
-      return false;
-    }
-    return true;
-  }
-  
-  private cacheIpError(userId: string): void {
-    this.ipErrorCache.set(userId, Date.now());
   }
 
   private getAuthToken(accessKey: string, secretKey: string, query?: string) {
@@ -239,7 +223,7 @@ export class UpbitService {
     let balanceKRW = 0;
     let balanceCoin = 0;
 
-    if (settings?.upbitAccessKey && settings?.upbitSecretKey && !this.isIpErrorCached(userId)) {
+    if (settings?.upbitAccessKey && settings?.upbitSecretKey) {
       try {
         const token = this.getAuthToken(settings.upbitAccessKey, settings.upbitSecretKey);
         const accountsRes = await axios.get(`${this.baseUrl}/accounts`, {
@@ -253,10 +237,6 @@ export class UpbitService {
         balanceCoin = coinAccount ? parseFloat(coinAccount.balance) : 0;
       } catch (e: any) {
         if (e.response?.data?.error) {
-          const errorName = e.response.data.error.name;
-          if (errorName === "no_authorization_ip") {
-            this.cacheIpError(userId);
-          }
           console.error("Upbit API error:", e.response.data.error);
         }
       }
@@ -1302,26 +1282,103 @@ export class UpbitService {
           if (!settings.upbitAccessKey || !settings.upbitSecretKey) continue;
 
           const strategy = settings.strategy || "percent";
+          const baseTargetAmount = parseFloat(settings.targetAmount || "10000");
+          
+          // Validate base target amount
+          if (isNaN(baseTargetAmount) || baseTargetAmount <= 0) {
+            console.warn(`[BOT] Invalid targetAmount for user ${settings.userId}, skipping`);
+            continue;
+          }
+          
+          // Parse and validate portfolio markets
+          const portfolioMarkets = settings.portfolioMarkets 
+            ? settings.portfolioMarkets.split(',').map(m => m.trim()).filter(Boolean) 
+            : [];
+          const portfolioAllocationsRaw = settings.portfolioAllocations 
+            ? settings.portfolioAllocations.split(',').map(a => parseFloat(a.trim())).filter(n => !isNaN(n) && n > 0) 
+            : [];
+          
+          // Build markets to trade with validated allocations
+          let marketsToTrade: Array<{ market: string; allocation: number }>;
+          
+          if (portfolioMarkets.length > 0 && portfolioAllocationsRaw.length === portfolioMarkets.length) {
+            // Normalize allocations to sum to 100
+            const rawSum = portfolioAllocationsRaw.reduce((sum, a) => sum + a, 0);
+            const normalizedAllocations = rawSum > 0 
+              ? portfolioAllocationsRaw.map(a => (a / rawSum) * 100)
+              : portfolioAllocationsRaw.map(() => 100 / portfolioMarkets.length);
+            
+            marketsToTrade = portfolioMarkets.map((market, idx) => ({
+              market,
+              allocation: normalizedAllocations[idx],
+            }));
+          } else if (portfolioMarkets.length > 0) {
+            // Equal allocation for all markets if allocations mismatch
+            const equalAllocation = 100 / portfolioMarkets.length;
+            marketsToTrade = portfolioMarkets.map(market => ({
+              market,
+              allocation: equalAllocation,
+            }));
+          } else {
+            // Single market mode
+            marketsToTrade = [{ market: settings.market, allocation: 100 }];
+          }
+          
+          // Execute strategy for each market with immutable settings copy
+          for (const { market, allocation } of marketsToTrade) {
+            const calculatedAmount = Math.floor(baseTargetAmount * allocation / 100);
+            
+            // Skip if calculated amount is too small (less than 5000 KRW minimum order)
+            if (calculatedAmount < 5000) {
+              console.warn(`[BOT] Calculated amount ${calculatedAmount} for ${market} is below minimum, skipping`);
+              continue;
+            }
+            
+            // Create mutable settings copy for this market with all required fields
+            // Strategy executors need to update referencePrice/lastTradeTime
+            const marketSettings = {
+              id: settings.id,
+              userId: settings.userId,
+              market: market,
+              isActive: settings.isActive,
+              strategy: settings.strategy,
+              buyThreshold: settings.buyThreshold,
+              sellThreshold: settings.sellThreshold,
+              targetAmount: String(calculatedAmount),
+              upbitAccessKey: settings.upbitAccessKey,
+              upbitSecretKey: settings.upbitSecretKey,
+              referencePrice: settings.referencePrice,
+              lastTradeTime: settings.lastTradeTime,
+              stopLossPercent: settings.stopLossPercent,
+              takeProfitPercent: settings.takeProfitPercent,
+              trailingStopEnabled: settings.trailingStopEnabled,
+              trailingStopPercent: settings.trailingStopPercent,
+              splitSellEnabled: settings.splitSellEnabled,
+              splitSellPercents: settings.splitSellPercents,
+              portfolioMarkets: settings.portfolioMarkets,
+              portfolioAllocations: settings.portfolioAllocations,
+            };
 
-          switch (strategy) {
-            case "percent":
-              await this.executePercentStrategy(settings);
-              break;
-            case "dca":
-              await this.executeDCAStrategy(settings);
-              break;
-            case "grid":
-              await this.executeGridStrategy(settings);
-              break;
-            case "rsi":
-              await this.executeRSIStrategy(settings);
-              break;
-            case "ma":
-              await this.executeMAStrategy(settings);
-              break;
-            case "bollinger":
-              await this.executeBollingerStrategy(settings);
-              break;
+            switch (strategy) {
+              case "percent":
+                await this.executePercentStrategy(marketSettings);
+                break;
+              case "dca":
+                await this.executeDCAStrategy(marketSettings);
+                break;
+              case "grid":
+                await this.executeGridStrategy(marketSettings);
+                break;
+              case "rsi":
+                await this.executeRSIStrategy(marketSettings);
+                break;
+              case "ma":
+                await this.executeMAStrategy(marketSettings);
+                break;
+              case "bollinger":
+                await this.executeBollingerStrategy(marketSettings);
+                break;
+            }
           }
         }
       } catch (e) {
