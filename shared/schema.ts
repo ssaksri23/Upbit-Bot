@@ -35,7 +35,8 @@ export const tradeLogs = pgTable("trade_logs", {
   volume: numeric("volume").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
   status: text("status").notNull(), 
-  message: text("message"), 
+  message: text("message"),
+  feePaid: numeric("fee_paid"), // 수수료 금액 (KRW)
 });
 
 // --- Bot Settings ---
@@ -67,6 +68,9 @@ export const botSettings = pgTable("bot_settings", {
   // Portfolio settings
   portfolioMarkets: text("portfolio_markets"), // comma-separated markets
   portfolioAllocations: text("portfolio_allocations"), // comma-separated percentages
+  
+  // Fee settings
+  feeRate: numeric("fee_rate").default("0.0005"), // 0.05% per trade (Upbit default)
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
