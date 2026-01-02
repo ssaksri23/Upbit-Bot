@@ -683,7 +683,7 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <Card className="lg:col-span-1 border-primary/20">
+        <Card className="lg:col-span-1 border-primary/20 overflow-hidden">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Settings2 className="w-5 h-5 text-primary" />
@@ -691,7 +691,7 @@ export default function Dashboard() {
             </div>
             <CardDescription>Configure your trading parameters</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 overflow-x-hidden">
             <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 border border-border">
               <div className="space-y-0.5">
                 <Label className="text-base font-medium">{t('dashboard.startBot')}</Label>
@@ -952,23 +952,23 @@ export default function Dashboard() {
             )}
 
             {formState.strategy === "bollinger" && (
-              <div className="p-3 bg-muted rounded-md text-sm">
+              <div className="p-3 bg-muted rounded-md text-sm overflow-hidden">
                 <p className="font-medium mb-1">{isKorean ? "볼린저 밴드 전략" : "Bollinger Bands Strategy"}</p>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground break-words">
                   {isKorean 
-                    ? "20분 이동평균선 기준 상/하단 밴드 터치 시 자동 매매 (2 표준편차)" 
-                    : "Auto trades when price touches upper/lower bands (20-period SMA, 2 std dev)"}
+                    ? "20분 이동평균선 기준 상/하단 밴드 터치 시 자동 매매" 
+                    : "Auto trades at band touches (20 SMA, 2 std)"}
                 </p>
               </div>
             )}
 
             {formState.strategy === "dca" && (
-              <div className="p-3 bg-muted rounded-md text-sm">
+              <div className="p-3 bg-muted rounded-md text-sm overflow-hidden">
                 <p className="font-medium mb-1">{isKorean ? "DCA 적립식 매수" : "DCA Strategy"}</p>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground break-words">
                   {isKorean 
-                    ? "1시간마다 설정한 금액으로 자동 매수합니다" 
-                    : "Automatically buys the target amount every hour"}
+                    ? "1시간마다 설정 금액으로 자동 매수" 
+                    : "Auto buys target amount every hour"}
                 </p>
               </div>
             )}
