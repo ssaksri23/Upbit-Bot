@@ -295,7 +295,7 @@ export default function Dashboard() {
   const isKorean = i18n.language === 'ko';
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8 animate-in">
+    <div className="container mx-auto p-4 md:p-8 space-y-8 animate-in overflow-x-hidden">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatusCard
           title={t('dashboard.status')}
@@ -1309,7 +1309,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               
-              <div className="grid grid-cols-5 gap-2 mt-4 text-xs">
+              <div className="grid grid-cols-5 gap-1 md:gap-2 mt-4 text-xs overflow-hidden">
                 <div className="bg-muted/50 rounded-md p-2 text-center">
                   <div className="text-muted-foreground">{isKorean ? "시가" : "Open"}</div>
                   <div className="font-mono font-medium">{chartData[chartData.length - 1]?.open?.toLocaleString() || "-"}</div>
@@ -1349,14 +1349,14 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs md:text-sm table-fixed">
                       <thead>
                         <tr className="border-b border-border text-left">
-                          <th className="py-2 font-medium text-muted-foreground">{t('columns.time')}</th>
-                          <th className="py-2 font-medium text-muted-foreground">{t('columns.side')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[70px]">{t('columns.time')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[30px]">{t('columns.side')}</th>
                           <th className="py-2 font-medium text-muted-foreground">{t('columns.price')}</th>
                           <th className="py-2 font-medium text-muted-foreground">{t('columns.volume')}</th>
-                          <th className="py-2 font-medium text-muted-foreground">{t('columns.status')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[60px] text-right">{t('columns.status')}</th>
                         </tr>
                       </thead>
                       <tbody data-testid="trades-table-body">
@@ -1368,24 +1368,26 @@ export default function Dashboard() {
                             animate={{ opacity: 1 }}
                             data-testid={`row-trade-${idx}`}
                           >
-                            <td className="py-3 font-mono text-xs" data-testid={`text-time-${idx}`}>
-                              {log.timestamp ? format(new Date(log.timestamp), 'MM-dd HH:mm:ss') : '-'}
+                            <td className="py-3 font-mono text-[10px] leading-tight" data-testid={`text-time-${idx}`}>
+                              {log.timestamp ? format(new Date(log.timestamp), 'MM-dd') : '-'}
+                              <br />
+                              {log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : ''}
                             </td>
                             <td className={cn(
-                              "py-3 font-bold",
+                              "py-3 font-bold text-xs",
                               log.side === 'bid' ? "text-green-500" : 
                               log.side === 'ask' ? "text-red-500" : "text-blue-500"
                             )} data-testid={`text-side-${idx}`}>
-                              {t(`sides.${log.side}`)}
+                              {log.side === 'bid' ? (isKorean ? '매수' : 'Buy') : log.side === 'ask' ? (isKorean ? '매도' : 'Sell') : t(`sides.${log.side}`)}
                             </td>
-                            <td className="py-3 font-mono" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
-                            <td className="py-3 font-mono" data-testid={`text-volume-${idx}`}>{log.volume}</td>
-                            <td className="py-3">
+                            <td className="py-3 font-mono truncate" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
+                            <td className="py-3 font-mono truncate" data-testid={`text-volume-${idx}`}>{Number(log.volume).toFixed(8)}</td>
+                            <td className="py-3 text-right">
                               <span className={cn(
-                                "px-2 py-0.5 rounded-full text-xs font-medium",
-                                log.status === 'success' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                                "text-xs font-medium",
+                                log.status === 'success' ? "text-green-500" : "text-red-500"
                               )} data-testid={`status-trade-${idx}`}>
-                                {log.status}
+                                {log.status === 'success' ? (isKorean ? '성공' : 'OK') : (isKorean ? '실패' : 'Fail')}
                               </span>
                             </td>
                           </motion.tr>
@@ -1413,15 +1415,15 @@ export default function Dashboard() {
       </div>
 
       {/* Coupang Partners Banner */}
-      <div className="mt-8 flex flex-col items-center">
+      <div className="mt-8 flex flex-col items-center overflow-hidden">
         <iframe 
           src="https://ads-partners.coupang.com/widgets.html?id=954378&template=carousel&trackingCode=AF4646383&subId=&width=680&height=140&tsource=" 
-          width="680" 
+          width="100%" 
           height="140" 
           frameBorder="0" 
           scrolling="no" 
           referrerPolicy="unsafe-url"
-          className="max-w-full border-0"
+          className="max-w-[680px] w-full border-0"
           style={{ minHeight: '140px' }}
           title="Coupang Partners"
         />
