@@ -103,6 +103,7 @@ export default function Dashboard() {
   const { data: indicators } = useIndicators(formState.market);
   const [buyAmount, setBuyAmount] = useState("10000");
   const [backtestDays, setBacktestDays] = useState("7");
+  const [visibleLogsCount, setVisibleLogsCount] = useState(5);
 
   useEffect(() => {
     if (settings) {
@@ -1347,49 +1348,63 @@ export default function Dashboard() {
                     {t('dashboard.noTrades')}
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left">
-                        <th className="py-2 font-medium text-muted-foreground">{t('columns.time')}</th>
-                        <th className="py-2 font-medium text-muted-foreground">{t('columns.side')}</th>
-                        <th className="py-2 font-medium text-muted-foreground">{t('columns.price')}</th>
-                        <th className="py-2 font-medium text-muted-foreground">{t('columns.volume')}</th>
-                        <th className="py-2 font-medium text-muted-foreground">{t('columns.status')}</th>
-                      </tr>
-                    </thead>
-                    <tbody data-testid="trades-table-body">
-                      {logs.map((log, idx) => (
-                        <motion.tr 
-                          key={log.id} 
-                          className="border-b border-border/50"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          data-testid={`row-trade-${idx}`}
+                  <>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left">
+                          <th className="py-2 font-medium text-muted-foreground">{t('columns.time')}</th>
+                          <th className="py-2 font-medium text-muted-foreground">{t('columns.side')}</th>
+                          <th className="py-2 font-medium text-muted-foreground">{t('columns.price')}</th>
+                          <th className="py-2 font-medium text-muted-foreground">{t('columns.volume')}</th>
+                          <th className="py-2 font-medium text-muted-foreground">{t('columns.status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody data-testid="trades-table-body">
+                        {logs.slice(0, visibleLogsCount).map((log, idx) => (
+                          <motion.tr 
+                            key={log.id} 
+                            className="border-b border-border/50"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            data-testid={`row-trade-${idx}`}
+                          >
+                            <td className="py-3 font-mono text-xs" data-testid={`text-time-${idx}`}>
+                              {log.timestamp ? format(new Date(log.timestamp), 'MM-dd HH:mm:ss') : '-'}
+                            </td>
+                            <td className={cn(
+                              "py-3 font-bold",
+                              log.side === 'bid' ? "text-green-500" : 
+                              log.side === 'ask' ? "text-red-500" : "text-blue-500"
+                            )} data-testid={`text-side-${idx}`}>
+                              {t(`sides.${log.side}`)}
+                            </td>
+                            <td className="py-3 font-mono" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
+                            <td className="py-3 font-mono" data-testid={`text-volume-${idx}`}>{log.volume}</td>
+                            <td className="py-3">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full text-xs font-medium",
+                                log.status === 'success' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                              )} data-testid={`status-trade-${idx}`}>
+                                {log.status}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {logs.length > visibleLogsCount && (
+                      <div className="flex justify-center mt-4">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setVisibleLogsCount(prev => prev + 10)}
+                          data-testid="button-load-more-trades"
                         >
-                          <td className="py-3 font-mono text-xs" data-testid={`text-time-${idx}`}>
-                            {log.timestamp ? format(new Date(log.timestamp), 'MM-dd HH:mm:ss') : '-'}
-                          </td>
-                          <td className={cn(
-                            "py-3 font-bold",
-                            log.side === 'bid' ? "text-green-500" : 
-                            log.side === 'ask' ? "text-red-500" : "text-blue-500"
-                          )} data-testid={`text-side-${idx}`}>
-                            {t(`sides.${log.side}`)}
-                          </td>
-                          <td className="py-3 font-mono" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
-                          <td className="py-3 font-mono" data-testid={`text-volume-${idx}`}>{log.volume}</td>
-                          <td className="py-3">
-                            <span className={cn(
-                              "px-2 py-0.5 rounded-full text-xs font-medium",
-                              log.status === 'success' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-                            )} data-testid={`status-trade-${idx}`}>
-                              {log.status}
-                            </span>
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          {isKorean ? "더보기" : "Load More"} ({logs.length - visibleLogsCount}{isKorean ? "개 남음" : " remaining"})
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
