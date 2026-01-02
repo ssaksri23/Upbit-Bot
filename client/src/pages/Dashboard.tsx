@@ -1338,8 +1338,16 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle>{t('dashboard.recentTrades')}</CardTitle>
+              {logs && logs.length > 0 && (
+                <div className="text-xs text-muted-foreground" data-testid="text-total-fees">
+                  {isKorean ? "누적 수수료: " : "Total Fees: "}
+                  <span className="font-mono text-yellow-500">
+                    {logs.reduce((sum, log) => sum + (log.feePaid ? Number(log.feePaid) : 0), 0).toLocaleString()}{isKorean ? "원" : " KRW"}
+                  </span>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -1352,11 +1360,11 @@ export default function Dashboard() {
                     <table className="w-full text-xs md:text-sm table-fixed">
                       <thead>
                         <tr className="border-b border-border text-left">
-                          <th className="py-2 font-medium text-muted-foreground w-[70px]">{t('columns.time')}</th>
-                          <th className="py-2 font-medium text-muted-foreground w-[30px]">{t('columns.side')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[55px]">{t('columns.time')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[25px]">{t('columns.side')}</th>
                           <th className="py-2 font-medium text-muted-foreground">{t('columns.price')}</th>
-                          <th className="py-2 font-medium text-muted-foreground">{t('columns.volume')}</th>
-                          <th className="py-2 font-medium text-muted-foreground w-[60px] text-right">{t('columns.status')}</th>
+                          <th className="py-2 font-medium text-muted-foreground hidden md:table-cell">{t('columns.volume')}</th>
+                          <th className="py-2 font-medium text-muted-foreground w-[45px] text-right">{isKorean ? "수수료" : "Fee"}</th>
                         </tr>
                       </thead>
                       <tbody data-testid="trades-table-body">
@@ -1378,17 +1386,21 @@ export default function Dashboard() {
                               log.side === 'bid' ? "text-green-500" : 
                               log.side === 'ask' ? "text-red-500" : "text-blue-500"
                             )} data-testid={`text-side-${idx}`}>
-                              {log.side === 'bid' ? (isKorean ? '매수' : 'Buy') : log.side === 'ask' ? (isKorean ? '매도' : 'Sell') : t(`sides.${log.side}`)}
+                              {log.side === 'bid' ? (isKorean ? '매수' : 'Buy') : log.side === 'ask' ? (isKorean ? '매도' : 'Sell') : '?'}
                             </td>
-                            <td className="py-3 font-mono truncate" data-testid={`text-price-${idx}`}>{Number(log.price).toLocaleString()}</td>
-                            <td className="py-3 font-mono truncate" data-testid={`text-volume-${idx}`}>{Number(log.volume).toFixed(8)}</td>
-                            <td className="py-3 text-right">
-                              <span className={cn(
-                                "text-xs font-medium",
-                                log.status === 'success' ? "text-green-500" : "text-red-500"
-                              )} data-testid={`status-trade-${idx}`}>
-                                {log.status === 'success' ? (isKorean ? '성공' : 'OK') : (isKorean ? '실패' : 'Fail')}
-                              </span>
+                            <td className="py-3 font-mono truncate" data-testid={`text-price-${idx}`}>
+                              {Number(log.price).toLocaleString()}
+                              {log.status === 'success' ? (
+                                <span className="text-green-500 ml-1 text-[10px]">{isKorean ? '성공' : 'OK'}</span>
+                              ) : (
+                                <span className="text-red-500 ml-1 text-[10px]">{isKorean ? '실패' : 'Fail'}</span>
+                              )}
+                            </td>
+                            <td className="py-3 font-mono truncate hidden md:table-cell" data-testid={`text-volume-${idx}`}>
+                              {Number(log.volume).toFixed(6)}
+                            </td>
+                            <td className="py-3 font-mono text-right text-yellow-500/80" data-testid={`text-fee-${idx}`}>
+                              {log.feePaid ? Math.round(Number(log.feePaid)).toLocaleString() : '-'}
                             </td>
                           </motion.tr>
                         ))}

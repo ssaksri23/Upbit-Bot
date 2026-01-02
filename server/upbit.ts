@@ -447,6 +447,25 @@ export class UpbitService {
     }
   }
 
+  // 수수료율 가져오기 (기본 0.05%)
+  private getFeeRate(settings: BotSettings): number {
+    return parseFloat(settings.feeRate || "0.0005");
+  }
+
+  // 수수료 버퍼 계산 (왕복 수수료 + 슬리피지 마진)
+  private getFeeBuffer(settings: BotSettings): number {
+    const feeRate = this.getFeeRate(settings);
+    const roundTripFee = feeRate * 2; // 매수 + 매도 수수료
+    const slippageMargin = 0.0005; // 0.05% 슬리피지 마진
+    return roundTripFee + slippageMargin; // 총 ~0.15%
+  }
+
+  // 수수료 금액 계산
+  private calculateFee(amount: number, settings: BotSettings): number {
+    const feeRate = this.getFeeRate(settings);
+    return amount * feeRate;
+  }
+
   private async executePercentStrategy(settings: BotSettings) {
     if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
 
@@ -455,6 +474,7 @@ export class UpbitService {
     const buyThreshold = parseFloat(settings.buyThreshold || "0.5") / 100;
     const sellThreshold = parseFloat(settings.sellThreshold || "0.5") / 100;
     const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const feeBuffer = this.getFeeBuffer(settings);
 
     const currentPrice = await this.getCurrentPrice(market);
     if (currentPrice === 0) return;
@@ -477,12 +497,16 @@ export class UpbitService {
 
     const coinSymbol = market.split("-")[1];
 
-    // BUY: Price dropped by threshold
-    if (priceChange <= -buyThreshold) {
+    // BUY: Price dropped by threshold (반드시 수수료 이상 하락해야 매수)
+    // 매수 후 매도 시 수익이 나려면 buyThreshold + feeBuffer 이상 하락해야 함
+    const effectiveBuyThreshold = Math.max(buyThreshold, feeBuffer);
+    
+    if (priceChange <= -effectiveBuyThreshold) {
       const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
       
       if (krwBalance >= targetAmount) {
-        console.log(`[BOT ${userId}] BUY signal: ${(priceChange * 100).toFixed(2)}% drop, buying ${targetAmount.toLocaleString()} KRW`);
+        const feePaid = this.calculateFee(targetAmount, settings);
+        console.log(`[BOT ${userId}] BUY signal: ${(priceChange * 100).toFixed(2)}% drop (threshold: ${(effectiveBuyThreshold * 100).toFixed(2)}%), buying ${targetAmount.toLocaleString()} KRW, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(
           settings.upbitAccessKey,
@@ -498,7 +522,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(targetAmount / currentPrice),
           status: result.success ? "success" : "failed",
-          message: result.success ? `매수 완료: ${targetAmount.toLocaleString()}원` : result.message,
+          message: result.success ? `매수 완료: ${targetAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -510,13 +535,18 @@ export class UpbitService {
       }
     }
 
-    // SELL: Price rose by threshold
-    if (priceChange >= sellThreshold) {
+    // SELL: Price rose by threshold (수수료 이상 상승해야 매도)
+    // 수익이 나려면 sellThreshold > feeBuffer 이어야 함
+    const effectiveSellThreshold = Math.max(sellThreshold, feeBuffer);
+    
+    if (priceChange >= effectiveSellThreshold) {
       const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
       const minOrderValue = 5000; // Upbit minimum order
+      const orderValue = coinBalance * currentPrice;
       
-      if (coinBalance * currentPrice >= minOrderValue) {
-        console.log(`[BOT ${userId}] SELL signal: ${(priceChange * 100).toFixed(2)}% rise, selling ${coinBalance} ${coinSymbol}`);
+      if (orderValue >= minOrderValue) {
+        const feePaid = this.calculateFee(orderValue, settings);
+        console.log(`[BOT ${userId}] SELL signal: ${(priceChange * 100).toFixed(2)}% rise (threshold: ${(effectiveSellThreshold * 100).toFixed(2)}%), selling ${coinBalance} ${coinSymbol}, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(
           settings.upbitAccessKey,
@@ -532,7 +562,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(coinBalance),
           status: result.success ? "success" : "failed",
-          message: result.success ? `매도 완료: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+          message: result.success ? `매도 완료: ${coinBalance.toFixed(8)} ${coinSymbol} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -564,7 +595,8 @@ export class UpbitService {
     const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
     
     if (krwBalance >= targetAmount) {
-      console.log(`[BOT ${userId}] DCA buy: ${targetAmount.toLocaleString()} KRW at ${currentPrice.toLocaleString()}`);
+      const feePaid = this.calculateFee(targetAmount, settings);
+      console.log(`[BOT ${userId}] DCA buy: ${targetAmount.toLocaleString()} KRW at ${currentPrice.toLocaleString()}, fee: ${feePaid.toFixed(0)} KRW`);
       
       const result = await this.placeBuyOrder(
         settings.upbitAccessKey,
@@ -580,7 +612,8 @@ export class UpbitService {
         price: String(currentPrice),
         volume: String(targetAmount / currentPrice),
         status: result.success ? "success" : "failed",
-        message: result.success ? `DCA 매수: ${targetAmount.toLocaleString()}원` : result.message,
+        message: result.success ? `DCA 매수: ${targetAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+        feePaid: result.success ? String(feePaid) : null,
       });
 
       if (result.success) {
@@ -600,9 +633,13 @@ export class UpbitService {
     const market = settings.market;
     const gridStep = parseFloat(settings.buyThreshold || "1") / 100; // Grid step as percentage
     const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const feeBuffer = this.getFeeBuffer(settings);
 
     const currentPrice = await this.getCurrentPrice(market);
     if (currentPrice === 0) return;
+
+    // Grid step must be larger than fee buffer to be profitable
+    const effectiveGridStep = Math.max(gridStep, feeBuffer);
 
     // Initialize reference price if not set
     let referencePrice = settings.referencePrice ? parseFloat(settings.referencePrice) : 0;
@@ -610,7 +647,7 @@ export class UpbitService {
       await this.storage.updateBotSettings(userId, { 
         referencePrice: String(currentPrice) 
       });
-      console.log(`[BOT ${userId}] Grid reference price set: ${currentPrice.toLocaleString()}`);
+      console.log(`[BOT ${userId}] Grid reference price set: ${currentPrice.toLocaleString()}, effective step: ${(effectiveGridStep * 100).toFixed(2)}%`);
       return;
     }
 
@@ -621,8 +658,8 @@ export class UpbitService {
     const priceChange = (currentPrice - referencePrice) / referencePrice;
     const coinSymbol = market.split("-")[1];
 
-    // Calculate how many grid levels price has moved
-    const gridLevels = Math.floor(Math.abs(priceChange) / gridStep);
+    // Calculate how many grid levels price has moved (using fee-adjusted step)
+    const gridLevels = Math.floor(Math.abs(priceChange) / effectiveGridStep);
     
     if (gridLevels >= 1) {
       // BUY: Price dropped by one or more grid levels
@@ -631,7 +668,8 @@ export class UpbitService {
         const buyAmount = targetAmount * gridLevels; // Buy more for larger drops
         
         if (krwBalance >= buyAmount) {
-          console.log(`[BOT ${userId}] Grid BUY: ${gridLevels} levels down, buying ${buyAmount.toLocaleString()} KRW`);
+          const feePaid = this.calculateFee(buyAmount, settings);
+          console.log(`[BOT ${userId}] Grid BUY: ${gridLevels} levels down, buying ${buyAmount.toLocaleString()} KRW, fee: ${feePaid.toFixed(0)} KRW`);
           
           const result = await this.placeBuyOrder(
             settings.upbitAccessKey,
@@ -647,12 +685,13 @@ export class UpbitService {
             price: String(currentPrice),
             volume: String(buyAmount / currentPrice),
             status: result.success ? "success" : "failed",
-            message: result.success ? `그리드 매수 (${gridLevels}단계): ${buyAmount.toLocaleString()}원` : result.message,
+            message: result.success ? `그리드 매수 (${gridLevels}단계): ${buyAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+            feePaid: result.success ? String(feePaid) : null,
           });
 
           if (result.success) {
             // Update reference price to current grid level
-            const newRef = referencePrice * (1 - gridStep * gridLevels);
+            const newRef = referencePrice * (1 - effectiveGridStep * gridLevels);
             await this.storage.updateBotSettings(userId, { 
               referencePrice: String(newRef),
               lastTradeTime: new Date()
@@ -668,9 +707,11 @@ export class UpbitService {
         // Sell proportional to grid levels (but not more than total balance)
         const sellRatio = Math.min(gridLevels * 0.25, 1); // 25% per grid level, max 100%
         const sellAmount = coinBalance * sellRatio;
+        const orderValue = sellAmount * currentPrice;
         
-        if (sellAmount * currentPrice >= minOrderValue) {
-          console.log(`[BOT ${userId}] Grid SELL: ${gridLevels} levels up, selling ${(sellRatio * 100).toFixed(0)}% (${sellAmount.toFixed(8)} ${coinSymbol})`);
+        if (orderValue >= minOrderValue) {
+          const feePaid = this.calculateFee(orderValue, settings);
+          console.log(`[BOT ${userId}] Grid SELL: ${gridLevels} levels up, selling ${(sellRatio * 100).toFixed(0)}% (${sellAmount.toFixed(8)} ${coinSymbol}), fee: ${feePaid.toFixed(0)} KRW`);
           
           const result = await this.placeSellOrder(
             settings.upbitAccessKey,
@@ -686,12 +727,13 @@ export class UpbitService {
             price: String(currentPrice),
             volume: String(sellAmount),
             status: result.success ? "success" : "failed",
-            message: result.success ? `그리드 매도 (${gridLevels}단계): ${sellAmount.toFixed(8)} ${coinSymbol}` : result.message,
+            message: result.success ? `그리드 매도 (${gridLevels}단계): ${sellAmount.toFixed(8)} ${coinSymbol} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+            feePaid: result.success ? String(feePaid) : null,
           });
 
           if (result.success) {
             // Update reference price to current grid level
-            const newRef = referencePrice * (1 + gridStep * gridLevels);
+            const newRef = referencePrice * (1 + effectiveGridStep * gridLevels);
             await this.storage.updateBotSettings(userId, { 
               referencePrice: String(newRef),
               lastTradeTime: new Date()
@@ -730,7 +772,8 @@ export class UpbitService {
       const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
       
       if (krwBalance >= targetAmount) {
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal`);
+        const feePaid = this.calculateFee(targetAmount, settings);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
 
@@ -739,7 +782,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(targetAmount / currentPrice),
           status: result.success ? "success" : "failed",
-          message: result.success ? `RSI 매수 (RSI=${rsi.toFixed(1)}): ${targetAmount.toLocaleString()}원` : result.message,
+          message: result.success ? `RSI 매수 (RSI=${rsi.toFixed(1)}): ${targetAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -751,9 +795,11 @@ export class UpbitService {
     else if (rsi > sellThreshold) {
       const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
       const minOrderValue = 5000;
+      const orderValue = coinBalance * currentPrice;
       
-      if (coinBalance * currentPrice >= minOrderValue) {
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal`);
+      if (orderValue >= minOrderValue) {
+        const feePaid = this.calculateFee(orderValue, settings);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
 
@@ -762,7 +808,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(coinBalance),
           status: result.success ? "success" : "failed",
-          message: result.success ? `RSI 매도 (RSI=${rsi.toFixed(1)}): ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+          message: result.success ? `RSI 매도 (RSI=${rsi.toFixed(1)}): ${coinBalance.toFixed(8)} ${coinSymbol} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -805,7 +852,8 @@ export class UpbitService {
       const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
       
       if (krwBalance >= targetAmount) {
-        console.log(`[BOT ${userId}] MA Golden Cross - BUY signal (Short:${shortMA.toFixed(0)} > Long:${longMA.toFixed(0)})`);
+        const feePaid = this.calculateFee(targetAmount, settings);
+        console.log(`[BOT ${userId}] MA Golden Cross - BUY signal (Short:${shortMA.toFixed(0)} > Long:${longMA.toFixed(0)}), fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
 
@@ -814,7 +862,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(targetAmount / currentPrice),
           status: result.success ? "success" : "failed",
-          message: result.success ? `MA 골든크로스 매수: ${targetAmount.toLocaleString()}원` : result.message,
+          message: result.success ? `MA 골든크로스 매수: ${targetAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -826,9 +875,11 @@ export class UpbitService {
     else if (prevShortMA >= prevLongMA && shortMA < longMA) {
       const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
       const minOrderValue = 5000;
+      const orderValue = coinBalance * currentPrice;
       
-      if (coinBalance * currentPrice >= minOrderValue) {
-        console.log(`[BOT ${userId}] MA Death Cross - SELL signal (Short:${shortMA.toFixed(0)} < Long:${longMA.toFixed(0)})`);
+      if (orderValue >= minOrderValue) {
+        const feePaid = this.calculateFee(orderValue, settings);
+        console.log(`[BOT ${userId}] MA Death Cross - SELL signal (Short:${shortMA.toFixed(0)} < Long:${longMA.toFixed(0)}), fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
 
@@ -837,7 +888,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(coinBalance),
           status: result.success ? "success" : "failed",
-          message: result.success ? `MA 데드크로스 매도: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+          message: result.success ? `MA 데드크로스 매도: ${coinBalance.toFixed(8)} ${coinSymbol} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -854,6 +906,7 @@ export class UpbitService {
     const userId = settings.userId;
     const market = settings.market;
     const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const feeBuffer = this.getFeeBuffer(settings);
 
     // Prevent rapid trading
     const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
@@ -867,13 +920,21 @@ export class UpbitService {
     const bands = this.calculateBollingerBands(prices, 20, 2);
 
     const coinSymbol = market.split("-")[1];
+    
+    // Check if band width is profitable (upper-lower > feeBuffer)
+    const bandWidthPercent = (bands.upper - bands.lower) / bands.middle;
+    if (bandWidthPercent < feeBuffer * 2) {
+      // Band too narrow for profitable trades after fees
+      return;
+    }
 
     // Price touches lower band - Buy signal
     if (currentPrice <= bands.lower) {
       const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
       
       if (krwBalance >= targetAmount) {
-        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} <= Lower ${bands.lower.toFixed(0)} - BUY`);
+        const feePaid = this.calculateFee(targetAmount, settings);
+        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} <= Lower ${bands.lower.toFixed(0)} - BUY, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
 
@@ -882,7 +943,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(targetAmount / currentPrice),
           status: result.success ? "success" : "failed",
-          message: result.success ? `볼린저 하단 매수: ${targetAmount.toLocaleString()}원` : result.message,
+          message: result.success ? `볼린저 하단 매수: ${targetAmount.toLocaleString()}원 (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -894,9 +956,11 @@ export class UpbitService {
     else if (currentPrice >= bands.upper) {
       const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
       const minOrderValue = 5000;
+      const orderValue = coinBalance * currentPrice;
       
-      if (coinBalance * currentPrice >= minOrderValue) {
-        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} >= Upper ${bands.upper.toFixed(0)} - SELL`);
+      if (orderValue >= minOrderValue) {
+        const feePaid = this.calculateFee(orderValue, settings);
+        console.log(`[BOT ${userId}] Bollinger: Price ${currentPrice} >= Upper ${bands.upper.toFixed(0)} - SELL, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
 
@@ -905,7 +969,8 @@ export class UpbitService {
           price: String(currentPrice),
           volume: String(coinBalance),
           status: result.success ? "success" : "failed",
-          message: result.success ? `볼린저 상단 매도: ${coinBalance.toFixed(8)} ${coinSymbol}` : result.message,
+          message: result.success ? `볼린저 상단 매도: ${coinBalance.toFixed(8)} ${coinSymbol} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+          feePaid: result.success ? String(feePaid) : null,
         });
 
         if (result.success) {
@@ -1357,6 +1422,7 @@ export class UpbitService {
               splitSellPercents: settings.splitSellPercents,
               portfolioMarkets: settings.portfolioMarkets,
               portfolioAllocations: settings.portfolioAllocations,
+              feeRate: settings.feeRate,
             };
 
             switch (strategy) {

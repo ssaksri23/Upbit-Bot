@@ -53,6 +53,20 @@ Preferred communication style: Simple, everyday language.
   - Price reference is shared (not optimal for independent coin strategies)
   - Future improvement: Implement per-market state storage for better multi-coin support
 
+### Fee-Aware Trading (2026-01-02)
+- **Fee Rate**: Upbit charges 0.05% per trade (buy or sell), configurable via `feeRate` in bot settings
+- **Fee Buffer**: Strategies use a fee buffer (round-trip fee + slippage margin ≈ 0.15%) to prevent unprofitable trades
+- **Strategy Adjustments**:
+  - **Percent/Grid**: Thresholds automatically adjusted to exceed fee buffer
+  - **Bollinger**: Skips trades when band width is too narrow for profitability
+  - **RSI/MA/DCA**: Fees logged per trade for cost tracking
+- **Trade Log**: Each successful trade records `feePaid` in KRW
+- **UI Display**: Dashboard shows per-trade fee and cumulative fees in the trades table
+- **Helper Functions** in `server/upbit.ts`:
+  - `getFeeRate(settings)`: Returns fee rate (default 0.0005 = 0.05%)
+  - `getFeeBuffer(settings)`: Returns minimum profitable price change (~0.15%)
+  - `calculateFee(amount, settings)`: Calculates fee for given trade amount
+
 ## External Dependencies
 
 ### Third-Party APIs
