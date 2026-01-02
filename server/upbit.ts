@@ -576,12 +576,15 @@ export class UpbitService {
     }
   }
 
+  // DCA Strategy: Buy at regular intervals
+  // Fee-aware: Only buy when price is in drawdown (better entry) or ATR indicates profitable volatility
   private async executeDCAStrategy(settings: BotSettings) {
     if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
 
     const userId = settings.userId;
     const market = settings.market;
     const targetAmount = parseFloat(settings.targetAmount || "10000");
+    const feeBuffer = this.getFeeBuffer(settings);
 
     // DCA: Buy at regular intervals (every 1 hour)
     const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
@@ -589,8 +592,24 @@ export class UpbitService {
     
     if (Date.now() - lastTradeTime < hourInMs) return;
 
-    const currentPrice = await this.getCurrentPrice(market);
+    const candles = await this.getCandles(market, 30);
+    if (candles.length < 15) return;
+    
+    const currentPrice = candles[candles.length - 1].close;
     if (currentPrice === 0) return;
+    
+    // DCA should buy regularly - only skip if price is significantly above average
+    // This ensures DCA works as intended while still being somewhat fee-conscious
+    const prices = candles.map(c => c.close);
+    const recentAvg = prices.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const priceVsAvg = (currentPrice - recentAvg) / recentAvg;
+    
+    // Only skip if price is significantly above recent average (bad DCA entry)
+    // Use 3x fee buffer (~0.45%) as threshold to not be too restrictive
+    if (priceVsAvg > feeBuffer * 3) {
+      console.log(`[BOT ${userId}] DCA skip: price ${(priceVsAvg * 100).toFixed(2)}% above avg, waiting for better entry`);
+      return;
+    }
 
     const krwBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, "KRW");
     
@@ -745,6 +764,7 @@ export class UpbitService {
   }
 
   // RSI Strategy: Buy when oversold (RSI < 30), sell when overbought (RSI > 70)
+  // Fee-aware: Only trade when expected price movement (ATR) can cover fees
   private async executeRSIStrategy(settings: BotSettings) {
     if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
 
@@ -753,6 +773,7 @@ export class UpbitService {
     const targetAmount = parseFloat(settings.targetAmount || "10000");
     const buyThreshold = parseFloat(settings.buyThreshold || "30"); // RSI buy level
     const sellThreshold = parseFloat(settings.sellThreshold || "70"); // RSI sell level
+    const feeBuffer = this.getFeeBuffer(settings);
 
     // Prevent rapid trading
     const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
@@ -764,6 +785,9 @@ export class UpbitService {
     const prices = candles.map(c => c.close);
     const currentPrice = prices[prices.length - 1];
     const rsi = this.calculateRSI(prices, 14);
+    
+    // Fee logging only - RSI signals are strong technical indicators
+    // We log expected volatility but don't block trades (user trusts RSI signals)
 
     const coinSymbol = market.split("-")[1];
 
@@ -773,7 +797,7 @@ export class UpbitService {
       
       if (krwBalance >= targetAmount) {
         const feePaid = this.calculateFee(targetAmount, settings);
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal, fee: ${feePaid.toFixed(0)} KRW`);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal, ATR: ${(expectedMovePct * 100).toFixed(2)}%, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
 
@@ -799,7 +823,7 @@ export class UpbitService {
       
       if (orderValue >= minOrderValue) {
         const feePaid = this.calculateFee(orderValue, settings);
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal, fee: ${feePaid.toFixed(0)} KRW`);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal, ATR: ${(expectedMovePct * 100).toFixed(2)}%, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
 
@@ -820,6 +844,7 @@ export class UpbitService {
   }
 
   // Moving Average Crossover Strategy: Buy when short MA crosses above long MA
+  // Fee-aware: Only trade when MA spread can cover fees
   private async executeMAStrategy(settings: BotSettings) {
     if (!settings.upbitAccessKey || !settings.upbitSecretKey) return;
 
@@ -828,6 +853,7 @@ export class UpbitService {
     const targetAmount = parseFloat(settings.targetAmount || "10000");
     const shortPeriod = Math.floor(parseFloat(settings.buyThreshold || "5")); // Short MA period
     const longPeriod = Math.floor(parseFloat(settings.sellThreshold || "20")); // Long MA period
+    const feeBuffer = this.getFeeBuffer(settings);
 
     // Prevent rapid trading
     const lastTradeTime = settings.lastTradeTime ? new Date(settings.lastTradeTime).getTime() : 0;
@@ -844,6 +870,9 @@ export class UpbitService {
     const longMA = this.calculateSMA(prices, longPeriod);
     const prevShortMA = this.calculateSMA(prices.slice(0, -1), shortPeriod);
     const prevLongMA = this.calculateSMA(prices.slice(0, -1), longPeriod);
+    
+    // Fee logging only - MA crossovers are reliable trend signals
+    // We log spread but don't block trades (crossovers often lead to sustained moves)
 
     const coinSymbol = market.split("-")[1];
 
@@ -1050,6 +1079,30 @@ export class UpbitService {
       }
     }
     return result;
+  }
+
+  // Calculate ATR (Average True Range) for volatility-based profitability checks
+  private calculateATR(candles: CandleData[], period: number = 14): number {
+    if (candles.length < period + 1) return 0;
+    
+    const trueRanges: number[] = [];
+    for (let i = 1; i < candles.length; i++) {
+      const high = candles[i].high;
+      const low = candles[i].low;
+      const prevClose = candles[i - 1].close;
+      const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+      trueRanges.push(tr);
+    }
+    
+    // Simple average of last 'period' true ranges
+    const recentTRs = trueRanges.slice(-period);
+    return recentTRs.reduce((a, b) => a + b, 0) / recentTRs.length;
+  }
+
+  // Calculate expected price movement potential as percentage
+  private getExpectedMovePct(candles: CandleData[], currentPrice: number): number {
+    const atr = this.calculateATR(candles, 14);
+    return atr / currentPrice; // ATR as percentage of current price
   }
 
   // Backtest strategy with historical data

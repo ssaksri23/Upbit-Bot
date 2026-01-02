@@ -55,11 +55,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Fee-Aware Trading (2026-01-02)
 - **Fee Rate**: Upbit charges 0.05% per trade (buy or sell), configurable via `feeRate` in bot settings
-- **Fee Buffer**: Strategies use a fee buffer (round-trip fee + slippage margin ≈ 0.15%) to prevent unprofitable trades
+- **Fee Buffer**: Round-trip fee + slippage margin ≈ 0.15% (buy fee + sell fee + buffer)
 - **Strategy Adjustments**:
-  - **Percent/Grid**: Thresholds automatically adjusted to exceed fee buffer
+  - **Percent/Grid**: Hard threshold adjustment - only trade when price change > fee buffer (prevents unprofitable trades)
   - **Bollinger**: Skips trades when band width is too narrow for profitability
-  - **RSI/MA/DCA**: Fees logged per trade for cost tracking
+  - **RSI/MA**: Trust technical signals - fees are logged but trades execute (crossovers/RSI extremes are strong signals)
+  - **DCA**: Skip only if price is significantly above average (>0.45% above 10-period avg)
 - **Trade Log**: Each successful trade records `feePaid` in KRW
 - **UI Display**: Dashboard shows per-trade fee and cumulative fees in the trades table
 - **Helper Functions** in `server/upbit.ts`:
