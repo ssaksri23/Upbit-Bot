@@ -83,6 +83,8 @@ export default function Dashboard() {
     buyThreshold: "0.5",
     sellThreshold: "0.5",
     targetAmount: "10000",
+    stopLossPercent: "5",
+    takeProfitPercent: "10",
     upbitAccessKey: "",
     upbitSecretKey: "",
     portfolioMarkets: [] as string[],
@@ -121,6 +123,8 @@ export default function Dashboard() {
         buyThreshold: settings.buyThreshold || "0.5",
         sellThreshold: settings.sellThreshold || "0.5",
         targetAmount: settings.targetAmount || "10000",
+        stopLossPercent: settings.stopLossPercent || "5",
+        takeProfitPercent: settings.takeProfitPercent || "10",
         portfolioMarkets: portfolioMarketsArr,
         portfolioAllocations: allocations,
       }));
@@ -141,6 +145,8 @@ export default function Dashboard() {
       buyThreshold: formState.buyThreshold,
       sellThreshold: formState.sellThreshold,
       targetAmount: formState.targetAmount,
+      stopLossPercent: formState.stopLossPercent,
+      takeProfitPercent: formState.takeProfitPercent,
       upbitAccessKey: formState.upbitAccessKey || undefined,
       upbitSecretKey: formState.upbitSecretKey || undefined,
       portfolioMarkets: portfolioMarketsStr,
@@ -983,6 +989,39 @@ export default function Dashboard() {
                   data-testid="input-target-amount"
                 />
                 <span className="absolute right-3 top-2 text-sm text-muted-foreground">KRW</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-red-500">{isKorean ? "손절 %" : "Stop-Loss %"}</Label>
+                <div className="relative">
+                  <Input 
+                    type="number"
+                    step="0.5"
+                    value={formState.stopLossPercent}
+                    onChange={e => setFormState({...formState, stopLossPercent: e.target.value})}
+                    placeholder="5"
+                    data-testid="input-stop-loss"
+                  />
+                  <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{isKorean ? "이 비율 이상 하락 시 자동 매도" : "Auto sell if price drops by this %"}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-green-500">{isKorean ? "익절 %" : "Take-Profit %"}</Label>
+                <div className="relative">
+                  <Input 
+                    type="number"
+                    step="0.5"
+                    value={formState.takeProfitPercent}
+                    onChange={e => setFormState({...formState, takeProfitPercent: e.target.value})}
+                    placeholder="10"
+                    data-testid="input-take-profit"
+                  />
+                  <span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{isKorean ? "이 비율 이상 상승 시 자동 매도" : "Auto sell if price rises by this %"}</p>
               </div>
             </div>
 

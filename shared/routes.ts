@@ -105,6 +105,8 @@ export const api = {
             buyThreshold: z.string(),
             sellThreshold: z.string(),
             targetAmount: z.string(),
+            stopLossPercent: z.string().optional().nullable(),
+            takeProfitPercent: z.string().optional().nullable(),
             hasAccessKey: z.boolean(),
             hasSecretKey: z.boolean(),
             portfolioMarkets: z.string().optional().nullable(),
