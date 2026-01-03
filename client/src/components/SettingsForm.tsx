@@ -41,7 +41,11 @@ export function SettingsForm({ initialData, onSubmit, isPending }: SettingsFormP
 
   useEffect(() => {
     if (initialData) {
-      form.reset(initialData);
+      form.reset({
+        ...initialData,
+        stopLossPercent: initialData.stopLossPercent || "5",
+        takeProfitPercent: initialData.takeProfitPercent || "10",
+      });
     }
   }, [initialData, form]);
 
