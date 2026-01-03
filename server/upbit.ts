@@ -637,7 +637,8 @@ export class UpbitService {
 
       if (result.success) {
         await this.storage.updateBotSettings(userId, { 
-          lastTradeTime: new Date()
+          lastTradeTime: new Date(),
+          referencePrice: String(currentPrice) // Set entry price for stop-loss/take-profit
         });
       }
     }
@@ -811,7 +812,10 @@ export class UpbitService {
         });
 
         if (result.success) {
-          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+          await this.storage.updateBotSettings(userId, { 
+            lastTradeTime: new Date(),
+            referencePrice: String(currentPrice) // Set entry price for stop-loss/take-profit
+          });
         }
       }
     }
@@ -896,7 +900,10 @@ export class UpbitService {
         });
 
         if (result.success) {
-          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+          await this.storage.updateBotSettings(userId, { 
+            lastTradeTime: new Date(),
+            referencePrice: String(currentPrice) // Set entry price for stop-loss/take-profit
+          });
         }
       }
     }
@@ -977,7 +984,10 @@ export class UpbitService {
         });
 
         if (result.success) {
-          await this.storage.updateBotSettings(userId, { lastTradeTime: new Date() });
+          await this.storage.updateBotSettings(userId, { 
+            lastTradeTime: new Date(),
+            referencePrice: String(currentPrice) // Set entry price for stop-loss/take-profit
+          });
         }
       }
     }

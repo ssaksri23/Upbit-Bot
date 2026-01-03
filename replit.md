@@ -68,6 +68,14 @@ Preferred communication style: Simple, everyday language.
   - `getFeeBuffer(settings)`: Returns minimum profitable price change (~0.15%)
   - `calculateFee(amount, settings)`: Calculates fee for given trade amount
 
+### Stop-Loss / Take-Profit Automation (2026-01-03)
+- **Stop-Loss**: Automatically sells when price drops below entry price by configured percentage (default: -5%)
+- **Take-Profit**: Automatically sells when price rises above entry price by configured percentage (default: +10%)
+- **Entry Price Tracking**: Uses `referencePrice` field to track the price at which user bought
+- **Priority**: Stop-loss/take-profit checks run BEFORE regular strategy execution
+- **UI Settings**: Users can configure stop-loss % and take-profit % in SettingsForm
+- **Trade Log**: Records "손절 매도" or "익절 매도" with percentage change
+
 ## External Dependencies
 
 ### Third-Party APIs

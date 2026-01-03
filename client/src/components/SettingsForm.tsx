@@ -13,6 +13,8 @@ const formSchema = insertBotSettingsSchema.extend({
   buyThreshold: z.coerce.string(),
   sellThreshold: z.coerce.string(),
   targetAmount: z.coerce.string(),
+  stopLossPercent: z.coerce.string(),
+  takeProfitPercent: z.coerce.string(),
 });
 
 type SettingsFormValues = z.infer<typeof formSchema>;
@@ -32,6 +34,8 @@ export function SettingsForm({ initialData, onSubmit, isPending }: SettingsFormP
       buyThreshold: "0.5",
       sellThreshold: "0.5",
       targetAmount: "10000",
+      stopLossPercent: "5",
+      takeProfitPercent: "10",
     },
   });
 
@@ -81,7 +85,7 @@ export function SettingsForm({ initialData, onSubmit, isPending }: SettingsFormP
                   <FormLabel className="text-xs uppercase tracking-wider text-green-400/80 font-semibold">Buy Drop %</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <Input {...field} type="number" step="0.1" className="glass-input h-12 font-mono pr-8" />
+                      <Input {...field} type="number" step="0.1" className="glass-input h-12 font-mono pr-8" data-testid="input-buy-threshold" />
                       <span className="absolute right-3 top-3 text-muted-foreground">%</span>
                     </div>
                   </FormControl>
@@ -97,7 +101,42 @@ export function SettingsForm({ initialData, onSubmit, isPending }: SettingsFormP
                   <FormLabel className="text-xs uppercase tracking-wider text-red-400/80 font-semibold">Sell Rise %</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <Input {...field} type="number" step="0.1" className="glass-input h-12 font-mono pr-8" />
+                      <Input {...field} type="number" step="0.1" className="glass-input h-12 font-mono pr-8" data-testid="input-sell-threshold" />
+                      <span className="absolute right-3 top-3 text-muted-foreground">%</span>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="stopLossPercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs uppercase tracking-wider text-red-500/80 font-semibold">Stop-Loss %</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input {...field} type="number" step="0.5" className="glass-input h-12 font-mono pr-8" data-testid="input-stop-loss" />
+                      <span className="absolute right-3 top-3 text-muted-foreground">%</span>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="takeProfitPercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs uppercase tracking-wider text-green-500/80 font-semibold">Take-Profit %</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input {...field} type="number" step="0.5" className="glass-input h-12 font-mono pr-8" data-testid="input-take-profit" />
                       <span className="absolute right-3 top-3 text-muted-foreground">%</span>
                     </div>
                   </FormControl>
