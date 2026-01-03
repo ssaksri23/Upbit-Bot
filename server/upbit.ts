@@ -797,7 +797,7 @@ export class UpbitService {
       
       if (krwBalance >= targetAmount) {
         const feePaid = this.calculateFee(targetAmount, settings);
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal, ATR: ${(expectedMovePct * 100).toFixed(2)}%, fee: ${feePaid.toFixed(0)} KRW`);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} < ${buyThreshold} - BUY signal, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeBuyOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, targetAmount);
 
@@ -823,7 +823,7 @@ export class UpbitService {
       
       if (orderValue >= minOrderValue) {
         const feePaid = this.calculateFee(orderValue, settings);
-        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal, ATR: ${(expectedMovePct * 100).toFixed(2)}%, fee: ${feePaid.toFixed(0)} KRW`);
+        console.log(`[BOT ${userId}] RSI=${rsi.toFixed(1)} > ${sellThreshold} - SELL signal, fee: ${feePaid.toFixed(0)} KRW`);
         
         const result = await this.placeSellOrder(settings.upbitAccessKey, settings.upbitSecretKey, market, coinBalance);
 
@@ -1007,6 +1007,85 @@ export class UpbitService {
         }
       }
     }
+  }
+
+  // Stop-Loss / Take-Profit automatic check
+  // Returns true if a sell was executed, false otherwise
+  private async checkStopLossTakeProfit(settings: BotSettings): Promise<boolean> {
+    if (!settings.upbitAccessKey || !settings.upbitSecretKey) return false;
+    
+    const userId = settings.userId;
+    const market = settings.market;
+    const coinSymbol = market.split("-")[1];
+    
+    // Get user's coin balance
+    const coinBalance = await this.getAccountBalance(settings.upbitAccessKey, settings.upbitSecretKey, coinSymbol);
+    const currentPrice = await this.getCurrentPrice(market);
+    
+    if (coinBalance <= 0 || currentPrice <= 0) return false;
+    
+    const orderValue = coinBalance * currentPrice;
+    if (orderValue < 5000) return false; // Below minimum order
+    
+    // Get entry price (reference price from last buy)
+    const entryPrice = parseFloat(settings.referencePrice || "0");
+    if (entryPrice <= 0) return false; // No reference price set
+    
+    const priceChange = (currentPrice - entryPrice) / entryPrice;
+    const priceChangePct = priceChange * 100;
+    
+    // Get stop-loss and take-profit thresholds
+    const stopLossPercent = parseFloat(settings.stopLossPercent || "5");
+    const takeProfitPercent = parseFloat(settings.takeProfitPercent || "10");
+    
+    let triggerType: string | null = null;
+    
+    // Check stop-loss (negative change exceeds threshold)
+    if (priceChangePct <= -stopLossPercent) {
+      triggerType = "stop-loss";
+    }
+    // Check take-profit (positive change exceeds threshold)
+    else if (priceChangePct >= takeProfitPercent) {
+      triggerType = "take-profit";
+    }
+    
+    if (!triggerType) return false;
+    
+    // Execute sell order
+    const feePaid = this.calculateFee(orderValue, settings);
+    console.log(`[BOT ${userId}] ${triggerType.toUpperCase()}: ${priceChangePct.toFixed(2)}% change, selling ${coinBalance.toFixed(8)} ${coinSymbol}`);
+    
+    const result = await this.placeSellOrder(
+      settings.upbitAccessKey,
+      settings.upbitSecretKey,
+      market,
+      coinBalance
+    );
+    
+    const messageKo = triggerType === "stop-loss" 
+      ? `손절 매도 (${priceChangePct.toFixed(2)}%): ${coinBalance.toFixed(8)} ${coinSymbol}`
+      : `익절 매도 (${priceChangePct.toFixed(2)}%): ${coinBalance.toFixed(8)} ${coinSymbol}`;
+    
+    await this.storage.createTradeLog({
+      userId,
+      market,
+      side: "ask",
+      price: String(currentPrice),
+      volume: String(coinBalance),
+      status: result.success ? "success" : "failed",
+      message: result.success ? `${messageKo} (수수료: ${feePaid.toFixed(0)}원)` : result.message,
+      feePaid: result.success ? String(feePaid) : null,
+    });
+    
+    if (result.success) {
+      // Reset reference price after selling
+      await this.storage.updateBotSettings(userId, { 
+        lastTradeTime: new Date(),
+        referencePrice: null 
+      });
+    }
+    
+    return result.success;
   }
 
   // Calculate MACD - returns last valid values only
@@ -1452,8 +1531,7 @@ export class UpbitService {
               continue;
             }
             
-            // Create mutable settings copy for this market with all required fields
-            // Strategy executors need to update referencePrice/lastTradeTime
+            // Create settings copy for this market
             const marketSettings = {
               id: settings.id,
               userId: settings.userId,
@@ -1477,6 +1555,12 @@ export class UpbitService {
               portfolioAllocations: settings.portfolioAllocations,
               feeRate: settings.feeRate,
             };
+
+            // Check stop-loss / take-profit FIRST (before regular strategy)
+            const soldByStopLoss = await this.checkStopLossTakeProfit(marketSettings);
+            if (soldByStopLoss) {
+              continue; // Skip regular strategy if stop-loss/take-profit triggered
+            }
 
             switch (strategy) {
               case "percent":
